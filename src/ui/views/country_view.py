@@ -124,14 +124,16 @@ class CountryView(ft.View):
             self.content_area.content = new_content
 
             # [LÓGICA FAB] Mostra o FAB apenas se o conteúdo suportar adição (tiver o método open_add_dialog)
-            # Geralmente é o PlaceTab. Se for Calculadora (Shop Paraguai), escondemos.
             has_add_feature = hasattr(new_content, "open_add_dialog")
-            self.floating_action_button.visible = has_add_feature
+
+            # Atualiza a visibilidade do FAB
+            if self.floating_action_button:
+                self.floating_action_button.visible = has_add_feature
 
             if should_update:
                 self.content_area.update()
                 # Atualiza o FAB na view (precisa chamar update da view ou do FAB se já montado)
-                self.update()
+                if self.page: self.update()
         except Exception as e:
             print(f"Erro ao carregar factory: {e}")
             self.content_area.content = ft.Text(f"Erro: {e}", color="red")

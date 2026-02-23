@@ -200,16 +200,24 @@ class QGProfileSheetManager:
         self.page.update()
 
     async def _delete_profile_confirmed(self, e):
+        # [ATUALIZADO] Fecha dialogs via propriedade e update
         self.confirm_delete_dialog.open = False
         self.bottom_sheet.open = False
         self.page.update()
 
-        # Logout logic implicit in deletion or handled by router on reload
+        # Exclui do banco
         await AuthService.delete_profile(self.user["id"])
+
+        # Remove sessão do client_storage
+        try:
+            if self.page.client_storage:
+                self.page.client_storage.remove("user_id")
+        except: pass
 
         # Redireciona para login e limpa
         self.page.views.clear()
-        self.page.go("/login")
+        # [ATUALIZADO] Usa push_route e await
+        await self.page.push_route("/login")
 
     def _navigate_to_chat(self, target_profile):
         self.page.run_task(ChatService.mark_conversation_as_read, self.user["id"], target_profile["id"])
