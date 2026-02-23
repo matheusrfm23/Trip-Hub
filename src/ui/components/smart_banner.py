@@ -107,7 +107,7 @@ class SmartBanner(ft.Container):
                 on_click=self._open_google_maps, ink=True, tooltip="Abrir Mapa"
             ),
             self._build_settings_btn()
-        ], alignment="spaceBetween")
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
         tsize = 32 if is_mobile else 42
         self.txt_timer = ft.Text("...", size=tsize, weight="bold", color="white", font_family="monospace", text_align="center")
@@ -176,11 +176,11 @@ class SmartBanner(ft.Container):
     def _build_manual_ui(self, data):
         self.txt_marquee = ft.Text(self.config.get('manual_text', ''), size=40, weight="bold", color="white", no_wrap=True)
         self.marquee_view = ft.Container(content=ft.Stack([ft.Container(content=self.txt_marquee, left=0)]), height=60, clip_behavior=ft.ClipBehavior.HARD_EDGE, expand=True, alignment=ft.Alignment(0,0))
-        return ft.Column([ft.Row([ft.Icon(ft.Icons.INFO_OUTLINE, color="white30"), self._build_settings_btn()], alignment="spaceBetween"), ft.Container(height=20), self.marquee_view, ft.Container(height=20)])
+        return ft.Column([ft.Row([ft.Icon(ft.Icons.INFO_OUTLINE, color="white30"), self._build_settings_btn()], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), ft.Container(height=20), self.marquee_view, ft.Container(height=20)])
 
     def _build_timer_ui(self, data):
         self.txt_timer = ft.Text("00:00:00", size=55, weight="bold", color=ft.Colors.CYAN_50, font_family="monospace")
-        return ft.Column([ft.Row([ft.Container(), self._build_settings_btn()], alignment="spaceBetween"), ft.Container(expand=True, content=self.txt_timer, alignment=ft.Alignment(0,0))])
+        return ft.Column([ft.Row([ft.Container(), self._build_settings_btn()], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), ft.Container(expand=True, content=self.txt_timer, alignment=ft.Alignment(0,0))])
 
     def _update_realtime_values(self, data):
         if not hasattr(self, 'txt_timer') or not self.txt_timer.page: return
@@ -259,14 +259,16 @@ class SmartBanner(ft.Container):
     def _open_google_maps(self, e):
         loc = self.config.get("target_location", {})
         lat, lon = loc.get("lat"), loc.get("lon")
-        if lat and lon: webbrowser.open(f"https://www.google.com/maps/search/?api=1&query={lat},{lon}")
+        if lat and lon: self.page_ref.launch_url(f"https://www.google.com/maps/search/?api=1&query={lat},{lon}")
         else:
             name = loc.get("name", "Brasil")
-            webbrowser.open(f"https://www.google.com/maps/search/?api=1&query={name}")
+            self.page_ref.launch_url(f"https://www.google.com/maps/search/?api=1&query={name}")
 
     # --- POPUPS ---
     def _open_currency_converter(self, e):
-        if self.weather_dialog in self.page_ref.overlay: self.page_ref.overlay.remove(self.weather_dialog)
+        # [MODERNO] Fecha anterior se existir
+        if self.weather_dialog: self.page_ref.close(self.weather_dialog)
+
         fin = self.full_data.get("finance", {})
         usd, blue, pyg = fin.get("usd", 5.0), fin.get("blue", 1000.0), fin.get("pyg", 1400.0)
         
@@ -288,12 +290,14 @@ class SmartBanner(ft.Container):
 
         content = ft.Column([ft.Text("Conversor Fronteira", size=12, color="white54", weight="bold"), ft.Container(height=10), txt_brl, ft.Divider(height=20, color="white10"), ft.Row([ft.Text("Dólar", width=60, color="white70"), lbl_usd], alignment="spaceBetween"), ft.Row([ft.Text("Peso Blue", width=70, color="white70"), lbl_blue], alignment="spaceBetween"), ft.Row([ft.Text("Guarani", width=60, color="white70"), lbl_pyg], alignment="spaceBetween"), ft.Container(height=10), ft.Text(f"Base: Blue {blue:.0f} | PYG {pyg:.0f}", size=9, color="white30", text_align="center")], tight=True)
         self.weather_dialog = ft.AlertDialog(content=ft.Container(content=content, width=260, height=340, padding=15), bgcolor=ft.Colors.GREY_900)
-        self.page_ref.overlay.append(self.weather_dialog)
-        self.weather_dialog.open = True
-        self.page_ref.update()
+
+        # [MODERNO]
+        self.page_ref.open(self.weather_dialog)
 
     def _open_weather_details(self, e):
-        if self.weather_dialog and self.weather_dialog in self.page_ref.overlay: self.page_ref.overlay.remove(self.weather_dialog)
+        # [MODERNO] Fecha anterior se existir
+        if self.weather_dialog: self.page_ref.close(self.weather_dialog)
+
         w = self.full_data.get("weather", {})
         def stat_row(icon, label, value, color): return ft.Container(content=ft.Row([ft.Container(content=ft.Icon(icon, color=color, size=20), bgcolor=ft.Colors.with_opacity(0.1, color), padding=8, border_radius=8), ft.Column([ft.Text(label, size=10, color="white54"), ft.Text(value, weight="bold", size=14)], spacing=2)], alignment="center"), bgcolor=ft.Colors.WHITE10, padding=10, border_radius=10, expand=True)
         forecast_items = []
@@ -304,13 +308,15 @@ class SmartBanner(ft.Container):
             except: pass
         content = ft.Column([ft.Row([ft.Icon(ft.Icons.LOCATION_ON, size=12, color="white54"), ft.Text(self.config.get("target_location", {}).get("name"), size=12, color="white54")], alignment="center"), ft.Container(height=10), ft.Row([ft.Icon(self._get_weather_icon(w.get("code", 0), w.get("is_day", 1)), size=60, color="white"), ft.Column([ft.Text(f"{w.get('temp', '--')}°", size=48, weight="bold", height=48), ft.Text(w.get("desc", ""), size=14, color="white70")], spacing=0)], alignment="center"), ft.Container(height=20), ft.Row([stat_row(ft.Icons.THERMOSTAT, "Sensação", f"{w.get('feels_like', '--')}°", ft.Colors.ORANGE), stat_row(ft.Icons.WATER_DROP, "Umidade", f"{w.get('humidity', '--')}%", ft.Colors.BLUE)]), ft.Container(height=10), ft.Row([stat_row(ft.Icons.AIR, "Vento", f"{w.get('wind', '--')} km/h", ft.Colors.GREY)]), ft.Divider(color="white10", height=30), ft.Text("PRÓXIMOS DIAS", size=10, weight="bold", color="white30"), ft.Column(forecast_items, spacing=0)], tight=True)
         self.weather_dialog = ft.AlertDialog(content=ft.Container(content=content, width=300, height=450, padding=10), bgcolor=ft.Colors.GREY_900)
-        self.page_ref.overlay.append(self.weather_dialog)
-        self.weather_dialog.open = True
-        self.page_ref.update()
+
+        # [MODERNO]
+        self.page_ref.open(self.weather_dialog)
 
     # --- ADMIN (FINAL) ---
     def _open_admin(self, e):
-        if self.admin_dialog and self.admin_dialog in self.page_ref.overlay: self.page_ref.overlay.remove(self.admin_dialog)
+        # [MODERNO] Fecha anterior se existir
+        if self.admin_dialog: self.page_ref.close(self.admin_dialog)
+
         cfg = self.config
         
         self.dd_mode = ft.Dropdown(label="Modo", value=cfg.get("mode", "auto"), options=[ft.dropdown.Option("auto"), ft.dropdown.Option("manual"), ft.dropdown.Option("timer")], bgcolor=ft.Colors.BLACK26, border_radius=10, height=50)
@@ -409,10 +415,18 @@ class SmartBanner(ft.Container):
         if is_mobile: body = ft.Column([self.nav_mobile, ft.Divider(height=1), self.content_area], spacing=5)
         else: body = ft.Row([self.nav_desktop, ft.VerticalDivider(width=1), self.content_area], expand=True)
 
-        self.admin_dialog = ft.AlertDialog(title=ft.Text("Configurações", size=18, weight="bold"), content=ft.Container(content=body, width=dialog_width, height=450), actions=[ft.TextButton("Cancelar", on_click=lambda e: setattr(self.admin_dialog, 'open', False) or self.page_ref.update()), ft.ElevatedButton("SALVAR", bgcolor=ft.Colors.CYAN_600, color="white", on_click=self._save_config)], actions_alignment="end", bgcolor=ft.Colors.GREY_900)
-        self.page_ref.overlay.append(self.admin_dialog)
-        self.admin_dialog.open = True
-        self.page_ref.update()
+        self.admin_dialog = ft.AlertDialog(
+            title=ft.Text("Configurações", size=18, weight="bold"),
+            content=ft.Container(content=body, width=dialog_width, height=450),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda e: self.page_ref.close(self.admin_dialog)),
+                ft.ElevatedButton("SALVAR", bgcolor=ft.Colors.CYAN_600, color="white", on_click=self._save_config)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            bgcolor=ft.Colors.GREY_900
+        )
+        # [MODERNO]
+        self.page_ref.open(self.admin_dialog)
 
     def _on_gps_position(self, e):
         if hasattr(self, 'tf_lat') and hasattr(self, 'tf_lon'):
@@ -448,13 +462,17 @@ class SmartBanner(ft.Container):
                 "target_location": {"name": self.tf_dest.value, "lat": float(self.tf_lat.value), "lon": float(self.tf_lon.value)}
             }
             await BannerService.save_config(new)
-            self.admin_dialog.open = False
+
+            # [MODERNO]
+            self.page_ref.close(self.admin_dialog)
+
             self.force_refresh = True
             self.page_ref.update()
+
             snack = ft.SnackBar(ft.Text("Salvo!"), bgcolor=ft.Colors.GREEN_700)
-            self.page_ref.overlay.append(snack)
-            snack.open = True
-            self.page_ref.update()
+            # [MODERNO]
+            self.page_ref.open(snack)
+
         except Exception as ex:
             print(f"Erro salvar: {ex}")
 
@@ -463,4 +481,4 @@ def create_input(label, icon, value=""):
 
 def create_switch(label, value):
     sw = ft.Switch(value=value, active_color=ft.Colors.CYAN_400)
-    return sw, ft.Container(content=ft.Row([ft.Text(label, size=13, weight="w500"), sw], alignment="spaceBetween"), padding=ft.padding.symmetric(vertical=5, horizontal=5))
+    return sw, ft.Container(content=ft.Row([ft.Text(label, size=13, weight="w500"), sw], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=ft.padding.symmetric(vertical=5, horizontal=5))

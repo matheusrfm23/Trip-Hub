@@ -6,6 +6,7 @@ class PlaceForm:
         self.on_save = on_save_callback
         self.dialog = None 
         self.item_id = None
+        self.category = None # Armazena categoria para usar no callback
         
         self.name_field = ft.TextField(label="Nome do Local", border_color=ft.Colors.CYAN)
         self.address_field = ft.TextField(label="Endereço", multiline=True, min_lines=2)
@@ -13,7 +14,7 @@ class PlaceForm:
         
         self.price_field = ft.TextField(
             label="Preço Médio", 
-            prefix=ft.Text("R$ "), 
+            prefix_text="R$ ",
             keyboard_type=ft.KeyboardType.NUMBER, 
             width=140
         )
@@ -39,23 +40,28 @@ class PlaceForm:
         }
 
     def open(self, category, item=None):
+        self.category = category
         self.item_id = item["id"] if item else None
         is_hotel = (category == "hotel")
         
+        # Popula campos baseado no item ou limpa
         self._populate_fields(item, is_hotel)
 
+        # Constrói o conteúdo dinamicamente
         content_controls = [
             ft.Text("Editar" if item else "Novo Local", size=20, weight="bold", color=ft.Colors.CYAN),
             ft.Divider(),
             self.name_field,
             self.address_field,
             self.maps_link_field,
-            self.price_field,
+            ft.Row([self.price_field]),
             ft.Divider(),
             self.desc_field
         ]
 
+        # Se for hotel, insere campos extras no meio da lista
         if is_hotel:
+            # Índices podem variar, mas vamos adicionar após o preço/descrição
             extra_hotel = [
                 ft.Divider(height=10, color="transparent"),
                 ft.Text("Datas da Viagem", weight="bold", color=ft.Colors.ORANGE_300),
@@ -78,13 +84,24 @@ class PlaceForm:
                     padding=5
                 )
             ]
-            content_controls[6:6] = extra_hotel
+            # Insere antes do divider final e botão salvar
+            content_controls.extend(extra_hotel)
 
         content_controls.append(ft.Container(height=20))
-        content_controls.append(
-            ft.ElevatedButton("Salvar", icon=ft.Icons.SAVE, bgcolor=ft.Colors.CYAN, color=ft.Colors.BLACK, on_click=self._save, width=float("inf"))
+
+        # Botão Salvar
+        btn_save = ft.ElevatedButton(
+            "Salvar",
+            icon=ft.Icons.SAVE,
+            bgcolor=ft.Colors.CYAN,
+            color=ft.Colors.BLACK,
+            on_click=self._save_click,
+            width=200
         )
 
+        content_controls.append(ft.Container(content=btn_save, alignment=ft.Alignment(0,0)))
+
+        # Cria o Dialog
         self.dialog = ft.AlertDialog(
             content=ft.Container(
                 content=ft.Column(content_controls, scroll=ft.ScrollMode.AUTO),
@@ -95,9 +112,8 @@ class PlaceForm:
             actions=[ft.TextButton("Cancelar", on_click=self._close)]
         )
         
-        self.page.overlay.append(self.dialog)
-        self.dialog.open = True
-        self.page.update()
+        # [MODERNO] Abre usando self.page.open()
+        self.page.open(self.dialog)
 
     def _populate_fields(self, item, is_hotel):
         if not item: item = {}
@@ -116,8 +132,12 @@ class PlaceForm:
             
             for key, sw in self.switches.items():
                 sw.value = item.get(key, False)
+        else:
+            # Reseta switches se não for hotel
+             for key, sw in self.switches.items():
+                sw.value = False
 
-    def _save(self, e):
+    def _save_click(self, e):
         if not self.name_field.value:
             self.name_field.error_text = "Nome obrigatório"
             self.name_field.update()
@@ -129,8 +149,10 @@ class PlaceForm:
             "maps_link": self.maps_link_field.value,
             "price": self.price_field.value,
             "description": self.desc_field.value,
+            "category": self.category # Garante que a categoria vai junto
         }
         
+        # Campos opcionais (Hotel)
         data["checkin"] = self.checkin_field.value
         data["checkout"] = self.checkout_field.value
         data["wifi"] = self.wifi_ssid.value
@@ -139,9 +161,15 @@ class PlaceForm:
         for key, sw in self.switches.items():
             data[key] = sw.value
         
-        self._close()
-        self.page.run_task(self.on_save, self.item_id, data)
+        # [MODERNO] Fecha usando self.page.close()
+        self.page.close(self.dialog)
+
+        # Chama callback (Geralmente update na lista)
+        if self.on_save:
+            # Passa item_id se for edição, ou None se for novo
+            self.on_save(self.item_id, data)
 
     def _close(self, e=None):
-        self.dialog.open = False
-        self.page.update()
+        # [MODERNO] Fecha usando self.page.close()
+        if self.dialog:
+            self.page.close(self.dialog)
