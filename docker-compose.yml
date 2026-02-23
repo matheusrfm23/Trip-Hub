@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  triphub:
+    build: .
+    container_name: triphub_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./assets:/app/assets
+      - ./logs:/app/logs
+      # [OPCIONAL] Sincroniza o relógio do container com o do Host (funciona melhor em Linux/WSL)
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      # Garante a porta correta
+      - PORT=8000
+      # [CRÍTICO] Força o fuso horário de Brasília na execução
+      - TZ=America/Sao_Paulo
+      # [LOGS] Garante que o log apareça instantaneamente no terminal
+      - PYTHONUNBUFFERED=1
+      # Sua chave secreta (Mantenha ou mova para .env)
+      - FLET_SECRET_KEY=sua_chave_secreta_super_segura_triphub_2026

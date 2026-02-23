@@ -1,0 +1,16 @@
+# Interface Gráfica
+flet==0.80.5
+
+# Variáveis de Ambiente
+python-dotenv
+
+# APIs e Rede
+nc-py-api
+httpx
+aiohttp
+
+# Utilitários e Logs
+flet-geolocator
+word-search-generator
+colorlog
+pyTelegramBotAPI

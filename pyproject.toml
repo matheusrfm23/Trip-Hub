@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "trip-hub"
+version = "0.1.0"
+description = "Trip-Hub Foundation Project"
+authors = ["Jules <jules@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+flet = "0.80.4"
+supabase = "^2.0.0"
+httpx = "^0.27.0"
+python-dotenv = "^1.0.0"
+pydantic = "^2.0.0"
+polars = "*"
+fastexcel = "*"
+pendulum = "^3.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.flet.app]
+assets_dir = "assets"

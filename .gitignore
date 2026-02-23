@@ -1,0 +1,25 @@
+# Ambientes Virtuais Python
+.venv/
+venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Bancos de dados locais (Não suba o SQLite com seus testes pro GitHub!)
+*.db
+*.sqlite3
+assets/data/
+
+# Arquivos de Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Configurações de IDE (VSCode, PyCharm, etc)
+.vscode/
+.idea/
+
+# Uploads locais de teste
+assets/uploads/
