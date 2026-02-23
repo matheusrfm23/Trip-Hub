@@ -14,15 +14,23 @@ class PlaceService:
         if not row: return None
         data = dict(row)
         
-        # Converte JSON Strings para objetos
-        for col in ["votes", "extra_data"]:
-            if data.get(col):
-                try:
-                    data[col] = json.loads(data[col])
-                except:
-                    data[col] = [] if col == "votes" else {}
-            else:
-                data[col] = [] if col == "votes" else {}
+        # 1. Processa JSON fields
+        votes = []
+        if data.get("votes"):
+            try: votes = json.loads(data["votes"])
+            except: pass
+        data["votes"] = votes
+
+        extra_data = {}
+        if data.get("extra_data"):
+            try: extra_data = json.loads(data["extra_data"])
+            except: pass
+
+        # 2. Flatten extra_data into main dict (CORREÇÃO PEDIDA)
+        data.update(extra_data)
+
+        # 3. Remove raw JSON columns to clean up
+        if "extra_data" in data: del data["extra_data"]
 
         # Boolean conversion
         data["visited"] = bool(data.get("visited", 0))
@@ -53,7 +61,11 @@ class PlaceService:
         try:
             new_id = str(uuid.uuid4())
             votes = json.dumps([], ensure_ascii=False)
-            extra_data = json.dumps({}, ensure_ascii=False)
+
+            # Separa campos fixos de extra_data
+            fixed_cols = ["country", "category", "name", "description", "lat", "lon", "maps_link", "added_by"]
+            extra = {k: v for k, v in data.items() if k not in fixed_cols and k != "id"}
+            extra_data_json = json.dumps(extra, ensure_ascii=False)
             
             cursor = conn.cursor()
             cursor.execute('''
@@ -64,7 +76,7 @@ class PlaceService:
             ''', (
                 new_id, data.get("country"), data.get("category"), data.get("name"),
                 data.get("description", ""), data.get("lat", 0.0), data.get("lon", 0.0),
-                data.get("maps_link", ""), 0, votes, extra_data,
+                data.get("maps_link", ""), 0, votes, extra_data_json,
                 data.get("added_by", "system")
             ))
             
@@ -82,34 +94,45 @@ class PlaceService:
     async def update_place(place_id, updated_data):
         conn = Database.get_connection()
         try:
-            allowed_cols = ["name", "description", "lat", "lon", "maps_link", "visited", "extra_data"]
+            # Busca dados atuais para merge do extra_data
+            cursor = conn.cursor()
+            cursor.execute("SELECT extra_data FROM places WHERE id = ?", (place_id,))
+            row = cursor.fetchone()
+            if not row: return False
+
+            current_extra = {}
+            if row["extra_data"]:
+                try: current_extra = json.loads(row["extra_data"])
+                except: pass
+
+            # Campos fixos
+            allowed_cols = ["name", "description", "lat", "lon", "maps_link", "visited"]
             set_clauses = []
             values = []
 
             for key, value in updated_data.items():
                 if key in allowed_cols:
                     set_clauses.append(f"{key} = ?")
-                    if key == "extra_data" and isinstance(value, dict):
-                        values.append(json.dumps(value, ensure_ascii=False))
-                    elif key == "visited":
-                         values.append(1 if value else 0)
-                    else:
-                        values.append(value)
-            
-            if not set_clauses:
-                return False
+                    if key == "visited": values.append(1 if value else 0)
+                    else: values.append(value)
+
+            # Merge extra_data
+            new_extra = {k: v for k, v in updated_data.items() if k not in allowed_cols and k != "id"}
+            if new_extra:
+                current_extra.update(new_extra)
+                set_clauses.append("extra_data = ?")
+                values.append(json.dumps(current_extra, ensure_ascii=False))
+
+            if not set_clauses: return False
 
             values.append(place_id)
             sql = f"UPDATE places SET {', '.join(set_clauses)} WHERE id = ?"
-            
-            cursor = conn.cursor()
+
             cursor.execute(sql, values)
             conn.commit()
-            
-            if cursor.rowcount > 0:
-                log.info(f"Local atualizado: {place_id}")
-                return True
-            return False
+
+            log.info(f"Local atualizado: {place_id}")
+            return True
         except Exception as e:
             log.error(f"Erro update_place: {e}")
             return False
@@ -122,7 +145,6 @@ class PlaceService:
         conn = Database.get_connection()
         try:
             cursor = conn.cursor()
-            # Valida country/category para segurança extra (opcional, mas bom pra consistência)
             cursor.execute(
                 "DELETE FROM places WHERE id = ? AND country = ? AND category = ?",
                 (place_id, country_code, category)
@@ -145,30 +167,22 @@ class PlaceService:
         conn = Database.get_connection()
         try:
             cursor = conn.cursor()
-            
-            # 1. Busca os votos atuais
             cursor.execute("SELECT votes FROM places WHERE id = ?", (place_id,))
             row = cursor.fetchone()
             
             if not row: return False
 
-            votes_json = row["votes"]
             votes = []
-            if votes_json:
-                try: votes = json.loads(votes_json)
+            if row["votes"]:
+                try: votes = json.loads(row["votes"])
                 except: pass
 
-            # 2. Toggle lógica
-            if user_id in votes:
-                votes.remove(user_id)
-            else:
-                votes.append(user_id)
+            if user_id in votes: votes.remove(user_id)
+            else: votes.append(user_id)
 
-            # 3. Salva de volta
             new_votes_json = json.dumps(votes, ensure_ascii=False)
             cursor.execute("UPDATE places SET votes = ? WHERE id = ?", (new_votes_json, place_id))
             conn.commit()
-
             return True
         except Exception as e:
             log.error(f"Erro toggle_vote: {e}")

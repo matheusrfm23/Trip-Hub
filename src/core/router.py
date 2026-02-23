@@ -75,6 +75,11 @@ class Router:
                 self.page.views.append(DashboardView(self.page))
             
             elif troute.match("/country/:code"):
+                # [CORREÇÃO] Regra do Histórico (Efeito Facebook)
+                # Garante que o Dashboard está na base se entrarmos direto via URL
+                dashboard_exists = any(isinstance(v, DashboardView) for v in self.page.views)
+                if not dashboard_exists:
+                    self.page.views.append(DashboardView(self.page))
                 self.page.views.append(CountryView(self.page, troute.code))
             
             elif route == "/error":

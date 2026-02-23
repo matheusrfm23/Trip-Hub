@@ -39,14 +39,16 @@ class DebtManager:
                 for c in contacts:
                     c['name'] = self._get_profile_name(c.get("id"))
                     self.debt_carousel.controls.append(self._build_contact_card(c))
-            if self.container.page: 
+
+            # [CORREÇÃO] Verificação segura de página
+            if getattr(self.container, "page", None):
                 self.debt_carousel.update()
                 if self.selected_contact_id: await self._refresh_history()
         except Exception as e: print(f"Erro render debts: {e}")
 
     async def _refresh_history(self):
         # [CORREÇÃO] Verifica se ainda está na página antes de processar
-        if not self.container.page: return
+        if not getattr(self.container, "page", None): return
         c_name = self._get_profile_name(self.selected_contact_id)
         await self._load_history(self.selected_contact_id, c_name)
 
@@ -71,17 +73,17 @@ class DebtManager:
     async def _select_contact(self, contact_id, contact_name):
         self.selected_contact_id = contact_id
         await self.render_carousel() 
-        if self.container.page: await self._load_history(contact_id, contact_name)
+        if getattr(self.container, "page", None): await self._load_history(contact_id, contact_name)
 
     async def _load_history(self, contact_id, contact_name):
         self.debt_detail_title.value = f"Extrato com {contact_name}"
-        if self.debt_detail_title.page: self.debt_detail_title.update()
+        if getattr(self.debt_detail_title, "page", None): self.debt_detail_title.update()
         try:
             history = await FinanceService.get_pairwise_history(self.user["id"], contact_id)
             self.debt_detail_list.controls = []
             if not history: self.debt_detail_list.controls.append(ft.Text("Vazio.", italic=True))
             for item in history: self.debt_detail_list.controls.append(self._build_history_card(item))
-            if self.debt_detail_list.page: self.debt_detail_list.update()
+            if getattr(self.debt_detail_list, "page", None): self.debt_detail_list.update()
         except Exception as e: print(f"Erro history: {e}")
 
     def _build_history_card(self, item):
