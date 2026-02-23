@@ -29,18 +29,18 @@ class InfoHub(ft.Container):
         self.content = ft.Container(height=50)
 
     def did_mount(self):
-        self._load_state()
-        self._render_main_layout()
+        self.page_ref.run_task(self._load_state)
 
-    def _load_state(self):
+    async def _load_state(self):
         try:
-            self.is_read = ProtocolService.has_read(self.user_id)
+            self.is_read = await ProtocolService.has_read(self.user_id)
         except:
             self.is_read = False
+        self._render_main_layout()
 
-    def _save_state(self):
+    async def _save_state(self):
         try:
-            ProtocolService.mark_as_read(self.user_id)
+            await ProtocolService.mark_as_read(self.user_id)
         except: pass
 
     def _render_main_layout(self):
@@ -255,7 +255,7 @@ Estes documentos devem estar na sua mão/mochila. **NUNCA DESPACHE.**
                         shape=ft.RoundedRectangleBorder(radius=10)
                     ),
                     width=float('inf'),
-                    on_click=self._mark_as_read_click
+                    on_click=lambda e: self.page_ref.run_task(self._mark_as_read_click, e)
                 )
             ])
         )
@@ -287,9 +287,9 @@ Estes documentos devem estar na sua mão/mochila. **NUNCA DESPACHE.**
             ]
         )
 
-    def _mark_as_read_click(self, e):
+    async def _mark_as_read_click(self, e):
         self.is_read = True
-        self._save_state()
+        await self._save_state()
         self._render_main_layout()
         
         if self.on_unlock:
