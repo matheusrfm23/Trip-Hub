@@ -87,10 +87,11 @@ class Database:
         ''')
 
         # 3. Tabela Places (arquivos br_hotel.json, etc)
+        # [ATUALIZADO] Estrutura completa conforme solicitado
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS places (
                 id TEXT PRIMARY KEY,
-                country TEXT,
+                country TEXT,       -- Era country_code no prompt, mas o service usa country
                 category TEXT,
                 name TEXT,
                 description TEXT,
@@ -238,6 +239,7 @@ class Database:
                 # Apenas renomeia se o commit foi bem sucedido
                 for filepath in files_to_rename:
                     try:
+                        # [CORREÇÃO] os.replace para evitar WinError 183
                         os.replace(filepath, filepath + ".bak")
                         log.info(f"Arquivo renomeado: {os.path.basename(filepath)} -> .bak")
                     except OSError as e:

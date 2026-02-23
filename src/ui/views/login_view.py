@@ -185,8 +185,10 @@ class LoginView(ft.View):
         self.pin_field.value = ""
         self.pin_error.value = ""
         self.pin_field.disabled = False
-        # [ATUALIZADO] Flet 0.80+ usa page.open(dialog)
-        self.main_page.open(self.pin_dialog)
+        # [ATUALIZADO] Revertido para padrão overlay
+        if self.pin_dialog not in self.main_page.overlay:
+            self.main_page.overlay.append(self.pin_dialog)
+        self.pin_dialog.open = True
         self.main_page.update()
         try: await self.pin_field.focus()
         except: pass
@@ -203,7 +205,10 @@ class LoginView(ft.View):
         user = await AuthService.login(user_id, pin)
 
         if user:
-            self.main_page.close(self.pin_dialog) # [ATUALIZADO]
+            # [ATUALIZADO] Fecha dialog corretamente
+            self.pin_dialog.open = False
+            self.main_page.update()
+
             self.main_page.user_profile = user
             
             # --- BLINDAGEM DE STORAGE ---
@@ -211,9 +216,6 @@ class LoginView(ft.View):
                 # Salva sessão no navegador (Flet Client Storage)
                 if hasattr(self.main_page, "client_storage") and self.main_page.client_storage:
                     self.main_page.client_storage.set("user_id", str(user["id"]))
-                
-                # [REMOVIDO] AuthService.save_cached_login(user["id"])
-                # A persistência agora é 100% responsabilidade do client_storage
             except Exception as ex:
                 logger.warning(f"Não foi possível salvar sessão: {ex}")
             # ---------------------------
@@ -234,16 +236,18 @@ class LoginView(ft.View):
     async def _open_add_dialog(self, e):
         self.new_name.value = ""
         self.new_pin.value = ""
-        # [ATUALIZADO] Flet 0.80+ usa page.open(dialog)
-        self.main_page.open(self.add_dialog)
+        # [ATUALIZADO] Revertido para padrão overlay
+        if self.add_dialog not in self.main_page.overlay:
+            self.main_page.overlay.append(self.add_dialog)
+        self.add_dialog.open = True
         self.main_page.update()
         try: await self.new_name.focus()
         except: pass
 
     def _close_dialogs(self, e):
-        # [ATUALIZADO] Flet 0.80+ usa page.close(dialog)
-        self.main_page.close(self.pin_dialog)
-        self.main_page.close(self.add_dialog)
+        # [ATUALIZADO] Revertido para padrão overlay
+        self.pin_dialog.open = False
+        self.add_dialog.open = False
         self.main_page.update()
 
     def _on_dialog_dismiss(self, e):
@@ -251,14 +255,17 @@ class LoginView(ft.View):
         self.pin_error.value = ""
         self.selected_profile = None
         self.pin_field.disabled = False
-        # self.main_page.overlay.clear() # Não necessário com page.close()
+        # [ATUALIZADO] Limpeza do overlay ao fechar
+        self.main_page.overlay.clear()
         self.main_page.update()
 
     async def _save_profile(self, e):
         if self.new_name.value and len(self.new_pin.value) == 4:
-            self.main_page.close(self.add_dialog) # [ATUALIZADO]
+            self.add_dialog.open = False
             self.main_page.update()
+
             self.loader.visible = True
             self.update()
+
             await AuthService.create_profile(self.new_name.value, self.new_pin.value)
             await self._load_profiles()
