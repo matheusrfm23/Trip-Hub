@@ -13,7 +13,7 @@ def load_config():
             "console_enabled": True,
             "file_enabled": True,
             "retention_days": 7,
-            "log_level": "INFO"
+            "monitoring_level": "BASIC"
         }
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -34,14 +34,15 @@ def print_menu(config):
     console_status = "🟢 ON" if config.get("console_enabled") else "🔴 OFF"
     file_status = "🟢 ON" if config.get("file_enabled") else "🔴 OFF"
     retention = config.get("retention_days", 7)
-    level = config.get("log_level", "INFO")
+    level = config.get("monitoring_level", "BASIC")
 
-    print(f"1. Toggle Console Logs  [{console_status}]")
-    print(f"2. Toggle File Logs     [{file_status}]")
-    print(f"3. Set Retention Days   [{retention} days]")
-    print(f"4. Set Log Level        [{level}]")
-    print(f"5. 🗑️  CLEAR ALL LOGS")
-    print(f"0. Exit")
+    print(f"1. Alternar Console Logs  [{console_status}]")
+    print(f"2. Alternar Arquivo Logs  [{file_status}]")
+    print(f"3. Definir Retenção       [{retention} dias]")
+    print(f"4. Definir Nível Monitoramento [{level}]")
+    print(f"   (BASIC, FULL, ERROR_ONLY)")
+    print(f"5. 🗑️  LIMPAR TODOS OS LOGS")
+    print(f"0. Sair")
     print("="*40)
 
 def clear_logs():
@@ -79,6 +80,13 @@ def main():
         elif cmd == "file-off":
             config["file_enabled"] = False
             save_config(config)
+        elif cmd.startswith("level="):
+            lvl = cmd.split("=")[1].upper()
+            if lvl in ["BASIC", "FULL", "ERROR_ONLY"]:
+                config["monitoring_level"] = lvl
+                save_config(config)
+            else:
+                print("Nível inválido. Use BASIC, FULL ou ERROR_ONLY.")
         else:
             print(f"Comando desconhecido: {cmd}")
         return
@@ -102,9 +110,13 @@ def main():
                     save_config(config)
             except: print("Valor inválido.")
         elif choice == "4":
-            lvl = input("Nível (DEBUG, INFO, WARNING, ERROR): ").upper()
-            if lvl in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
-                config["log_level"] = lvl
+            print("Escolha o nível:")
+            print("  BASIC: Logs padrão + Performance lenta")
+            print("  FULL: Logs detalhados + Argumentos + Todo tempo execução")
+            print("  ERROR_ONLY: Apenas erros críticos")
+            lvl = input("Nível (BASIC/FULL/ERROR_ONLY): ").upper()
+            if lvl in ["BASIC", "FULL", "ERROR_ONLY"]:
+                config["monitoring_level"] = lvl
                 save_config(config)
             else:
                 print("Nível inválido.")

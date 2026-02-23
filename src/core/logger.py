@@ -15,7 +15,13 @@ class TripHubLogger:
         "console_enabled": True,
         "file_enabled": True,
         "retention_days": 7,
-        "log_level": "INFO"
+        "monitoring_level": "BASIC"  # ERROR_ONLY, BASIC, FULL
+    }
+
+    LEVEL_MAP = {
+        "ERROR_ONLY": logging.ERROR,
+        "BASIC": logging.INFO,
+        "FULL": logging.DEBUG
     }
 
     @classmethod
@@ -25,9 +31,13 @@ class TripHubLogger:
             os.makedirs(LOG_DIR)
 
         cls._load_config()
-        
+
         logger = logging.getLogger(name)
-        logger.setLevel(getattr(logging, cls._config.get("log_level", "INFO").upper()))
+
+        # Define o nível do logger baseado na configuração
+        level_name = cls._config.get("monitoring_level", "BASIC").upper()
+        log_level = cls.LEVEL_MAP.get(level_name, logging.INFO)
+        logger.setLevel(log_level)
 
         # Evita duplicação de handlers se get_logger for chamado várias vezes
         if logger.hasHandlers():
@@ -81,6 +91,10 @@ class TripHubLogger:
                 json.dump(cls._config, f, indent=4)
         except Exception as e:
             print(f"Erro ao salvar log_config.json: {e}")
+
+    @classmethod
+    def get_monitoring_level(cls):
+        return cls._config.get("monitoring_level", "BASIC").upper()
 
 # Função helper global para fácil importação
 def get_logger(name="TripHub"):
