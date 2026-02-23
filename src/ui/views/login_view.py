@@ -1,4 +1,3 @@
-# ARQUIVO: src/ui/views/login_view.py
 import flet as ft
 import logging
 from src.logic.auth_service import AuthService
@@ -213,23 +212,16 @@ class LoginView(ft.View):
                 if hasattr(self.main_page, "client_storage") and self.main_page.client_storage:
                     self.main_page.client_storage.set("user_id", str(user["id"]))
                 
-                # Salva cache local no servidor (Server Side) para recuperação rápida
-                AuthService.save_cached_login(user["id"])
+                # [REMOVIDO] AuthService.save_cached_login(user["id"])
+                # A sessão agora é puramente Client Side.
             except Exception as ex:
                 logger.warning(f"Não foi possível salvar sessão: {ex}")
             # ---------------------------
             
             self._close_dialogs(None)
             
-            # [CORREÇÃO CRÍTICA DE ROTA]
-            # Se a URL já for /dashboard (porque o Router bloqueou e mostrou login),
-            # o comando .go("/dashboard") não dispara evento de rota.
-            # Redirecionamos para "/" que o Router automaticamente jogará para o dashboard.
-            if self.main_page.route == "/dashboard":
-                logger.info("Rota presa em /dashboard detectada. Redirecionando via root.")
-                self.main_page.go("/")
-            else:
-                self.main_page.go("/dashboard")
+            # [CORREÇÃO] Redirecionamento moderno
+            self.main_page.go("/dashboard")
         else:
             self.pin_error.value = "Senha incorreta"
             self.pin_field.disabled = False
