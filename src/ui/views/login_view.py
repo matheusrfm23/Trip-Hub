@@ -221,11 +221,13 @@ class LoginView(ft.View):
             # ---------------------------
             
             # [CORREÇÃO CRÍTICA DE ROTA]
-            if self.main_page.route == "/dashboard":
-                logger.info("Rota presa em /dashboard detectada. Redirecionando via root.")
-                self.main_page.go("/")
-            else:
-                self.main_page.go("/dashboard")
+            # Limpa as views para evitar acumulação na pilha
+            self.main_page.views.clear()
+            # Define a rota diretamente
+            self.main_page.route = "/dashboard"
+            # Aguarda a mudança de rota oficial e atualiza
+            await self.main_page.push_route("/dashboard")
+            self.main_page.update()
         else:
             self.pin_error.value = "Senha incorreta"
             self.pin_field.disabled = False
