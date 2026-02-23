@@ -1,7 +1,5 @@
+# ARQUIVO: src/ui/views/country_view.py
 import flet as ft
-# Removemos a importação direta de PlaceTab
-# from src.ui.components.place_tab import PlaceTab
-# Importamos a Factory (O Cérebro)
 from src.ui.components.content_factory import ContentFactory
 
 class CountryView(ft.View):
@@ -25,14 +23,14 @@ class CountryView(ft.View):
         # --- TOP BAR ---
         self.top_bar = ft.Container(
             padding=ft.padding.only(left=5, right=10, top=5, bottom=5),
-            bgcolor=self.cfg["color"], # Usa a cor do país
+            bgcolor=self.cfg["color"],
             content=ft.Row([
                 ft.IconButton(ft.Icons.ARROW_BACK, icon_color=ft.Colors.WHITE, on_click=lambda _: self.main_page.go("/dashboard")),
                 ft.Container(content=self.country_row, expand=True, clip_behavior=ft.ClipBehavior.HARD_EDGE)
             ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         )
 
-        # --- SELETOR DE CATEGORIA (Manual Tabs) ---
+        # --- SELETOR DE CATEGORIA ---
         self.cat_row = ft.Row(scroll=ft.ScrollMode.HIDDEN, expand=True, spacing=5)
         self.categories = [
             ("hotel", "Hospedagem", ft.Icons.BED),
@@ -52,7 +50,15 @@ class CountryView(ft.View):
         # --- ÁREA DE CONTEÚDO ---
         self.content_area = ft.Container(expand=True, bgcolor=ft.Colors.BLACK)
         
-        # Carrega o conteúdo inicial usando a Factory
+        # --- FAB (Floating Action Button) ---
+        # [RESTAURADO E POLIDO]
+        self.floating_action_button = ft.FloatingActionButton(
+            icon=ft.Icons.ADD,
+            bgcolor=ft.Colors.CYAN,
+            on_click=self._on_fab_click
+        )
+
+        # Carrega o conteúdo inicial
         self._load_content(should_update=False)
 
         self.controls = [
@@ -99,10 +105,9 @@ class CountryView(ft.View):
     def _set_country(self, code):
         self.current_country = code
         self.cfg = self.configs.get(code, self.configs["br"])
-        # Atualiza cor da TopBar
         self.top_bar.bgcolor = self.cfg["color"]
         self._build_country_selector()
-        self.top_bar.update() # Atualiza topbar e row
+        self.top_bar.update()
         self._load_content(True)
 
     def _set_category(self, key):
@@ -113,15 +118,29 @@ class CountryView(ft.View):
 
     def _load_content(self, should_update=True):
         try:
-            # === AQUI ESTÁ A INTEGRAÇÃO DA FASE 3 ===
-            # Em vez de chamar PlaceTab direto, chamamos a Factory.
-            # Se for 'py' e 'shop' no futuro, a Factory entregará a calculadora.
+            # Obtém o conteúdo da Factory
+            # Nota: O conteúdo retornado pode ser um PlaceTab ou um CalculatorWrapper
             new_content = ContentFactory.get_content(self.main_page, self.current_country, self.current_category)
-            
             self.content_area.content = new_content
+
+            # [LÓGICA FAB] Mostra o FAB apenas se o conteúdo suportar adição (tiver o método open_add_dialog)
+            # Geralmente é o PlaceTab. Se for Calculadora (Shop Paraguai), escondemos.
+            has_add_feature = hasattr(new_content, "open_add_dialog")
+            self.floating_action_button.visible = has_add_feature
+
             if should_update:
                 self.content_area.update()
+                # Atualiza o FAB na view (precisa chamar update da view ou do FAB se já montado)
+                self.update()
         except Exception as e:
             print(f"Erro ao carregar factory: {e}")
             self.content_area.content = ft.Text(f"Erro: {e}", color="red")
             if should_update: self.content_area.update()
+
+    def _on_fab_click(self, e):
+        # Redireciona o clique para o componente filho (PlaceTab)
+        current_content = self.content_area.content
+        if hasattr(current_content, "open_add_dialog"):
+            current_content.open_add_dialog(e)
+        else:
+            print("Conteúdo atual não suporta adição.")

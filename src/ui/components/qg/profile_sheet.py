@@ -21,9 +21,22 @@ class QGProfileSheetManager:
             on_dismiss=self._on_sheet_dismiss
         )
 
+        self.confirm_delete_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("⚠️ ZONA DE PERIGO ⚠️", color=ft.Colors.RED),
+            content=ft.Text("Tem certeza? Esta ação apagará permanentemente o seu Perfil, Voos e Finanças e não tem volta."),
+            actions=[
+                ft.TextButton("Cancelar", on_click=self._close_delete_dialog),
+                ft.ElevatedButton("SIM, APAGAR TUDO", bgcolor=ft.Colors.RED, color=ft.Colors.WHITE, on_click=self._delete_profile_confirmed)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+
     def cleanup(self):
         if self.bottom_sheet in self.page.overlay:
             self.page.overlay.remove(self.bottom_sheet)
+        if self.confirm_delete_dialog in self.page.overlay:
+            self.page.overlay.remove(self.confirm_delete_dialog)
 
     def handle_resize(self, height):
         if self.is_chat_active and self.bottom_sheet.open:
@@ -139,6 +152,21 @@ class QGProfileSheetManager:
             ]
         )
 
+        # --- BOTÃO DE EXCLUSÃO (Seguro) ---
+        delete_section = ft.Container()
+        if is_me:
+            delete_section = ft.Container(
+                margin=ft.margin.only(top=30),
+                alignment=ft.Alignment(0, 0),
+                content=ft.TextButton(
+                    "Excluir Conta",
+                    icon=ft.Icons.DELETE_FOREVER,
+                    icon_color=ft.Colors.RED,
+                    style=ft.ButtonStyle(color=ft.Colors.RED),
+                    on_click=self._confirm_delete_profile
+                )
+            )
+
         self.sheet_content.content = ft.Container(
             padding=20, 
             height=850, 
@@ -150,7 +178,8 @@ class QGProfileSheetManager:
                 flight_widget, 
                 fin_widget,
                 ft.Text("Acessar Informações:", weight="bold", color=ft.Colors.GREY_400),
-                grid_buttons
+                grid_buttons,
+                delete_section # [ATUALIZADO]
             ], scroll=ft.ScrollMode.AUTO)
         )
         
@@ -159,6 +188,28 @@ class QGProfileSheetManager:
         if self.bottom_sheet not in self.page.overlay: self.page.overlay.append(self.bottom_sheet)
         self.bottom_sheet.open = True
         self.page.update()
+
+    def _confirm_delete_profile(self, e):
+        if self.confirm_delete_dialog not in self.page.overlay:
+            self.page.overlay.append(self.confirm_delete_dialog)
+        self.confirm_delete_dialog.open = True
+        self.page.update()
+
+    def _close_delete_dialog(self, e):
+        self.confirm_delete_dialog.open = False
+        self.page.update()
+
+    async def _delete_profile_confirmed(self, e):
+        self.confirm_delete_dialog.open = False
+        self.bottom_sheet.open = False
+        self.page.update()
+
+        # Logout logic implicit in deletion or handled by router on reload
+        await AuthService.delete_profile(self.user["id"])
+
+        # Redireciona para login e limpa
+        self.page.views.clear()
+        self.page.go("/login")
 
     def _navigate_to_chat(self, target_profile):
         self.page.run_task(ChatService.mark_conversation_as_read, self.user["id"], target_profile["id"])

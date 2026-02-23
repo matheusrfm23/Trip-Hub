@@ -140,39 +140,26 @@ class LoginView(ft.View):
 
     def _create_circular_profile(self, profile):
         initials = profile["name"][:2].upper()
-        # [CORREÇÃO] Adicionada opção de excluir perfil
+        # [LIMPEZA DE SEGURANÇA] Removido botão de apagar
         return ft.Column(
             controls=[
-                ft.Stack([
-                    ft.Container(
-                        width=100, height=100,
-                        border_radius=50,
-                        bgcolor=ft.Colors.GREY_900,
-                        border=ft.border.all(2, ft.Colors.CYAN_400),
-                        alignment=ft.Alignment(0, 0),
-                        content=ft.Text(initials, size=30, weight="bold", color=ft.Colors.WHITE),
-                        ink=True,
-                        data=profile,
-                        on_click=self._on_profile_click
-                    ),
-                    ft.Container(
-                        content=ft.IconButton(ft.Icons.CLOSE, icon_size=16, icon_color=ft.Colors.RED, on_click=lambda e: self.main_page.run_task(self._delete_profile, profile["id"])),
-                        top=0, right=0,
-                        visible=False # TODO: Habilitar apenas se modo de edição? Por simplicidade, deixo visível ou implemento long press
-                    )
-                ]),
-                ft.Text(profile["name"], size=16, weight="bold", color=ft.Colors.WHITE70, text_align="center"),
-                ft.TextButton("Apagar", on_click=lambda e: self.main_page.run_task(self._delete_profile, profile["id"]), style=ft.ButtonStyle(color=ft.Colors.RED_900, overlay_color=ft.Colors.RED_100))
+                ft.Container(
+                    width=100, height=100,
+                    border_radius=50,
+                    bgcolor=ft.Colors.GREY_900,
+                    border=ft.border.all(2, ft.Colors.CYAN_400),
+                    alignment=ft.Alignment(0, 0),
+                    content=ft.Text(initials, size=30, weight="bold", color=ft.Colors.WHITE),
+                    ink=True,
+                    data=profile,
+                    on_click=self._on_profile_click
+                ),
+                ft.Text(profile["name"], size=16, weight="bold", color=ft.Colors.WHITE70, text_align="center")
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.CENTER,
-            spacing=5
+            spacing=10
         )
-
-    async def _delete_profile(self, profile_id):
-        # [CORREÇÃO] await na exclusão
-        await AuthService.delete_profile(profile_id)
-        await self._load_profiles()
 
     def _create_add_button(self):
         return ft.Column(
