@@ -1,0 +1,6 @@
+{
+    "console_enabled": true,
+    "file_enabled": true,
+    "retention_days": 7,
+    "log_level": "INFO"
+}

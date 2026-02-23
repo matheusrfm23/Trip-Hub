@@ -1,54 +1,87 @@
+import json
 import logging
-import colorlog
 import os
-from logging.handlers import RotatingFileHandler
+import sys
+from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
 
-# Cria pasta de logs se não existir
+# Diretório de Logs
 LOG_DIR = "logs"
-if not os.path.exists(LOG_DIR):
-    os.makedirs(LOG_DIR)
+CONFIG_FILE = "log_config.json"
 
-def get_logger(name):
-    """
-    Retorna um logger configurado com cores para o terminal e arquivo rotativo.
-    """
-    logger = logging.getLogger(name)
-    
-    # Evita duplicidade de logs se chamar a função várias vezes
-    if logger.handlers:
-        return logger
+class TripHubLogger:
+    _instance = None
+    _config = {
+        "console_enabled": True,
+        "file_enabled": True,
+        "retention_days": 7,
+        "log_level": "INFO"
+    }
+
+    @classmethod
+    def get_logger(cls, name="TripHub"):
+        """Retorna uma instância configurada de Logger"""
+        if not os.path.exists(LOG_DIR):
+            os.makedirs(LOG_DIR)
+
+        cls._load_config()
         
-    logger.setLevel(logging.DEBUG)
+        logger = logging.getLogger(name)
+        logger.setLevel(getattr(logging, cls._config.get("log_level", "INFO").upper()))
 
-    # --- FORMATO ---
-    log_format = "%(asctime)s | %(log_color)s%(levelname)-8s%(reset)s | %(cyan)s%(name)s%(reset)s | %(message)s"
-    date_format = "%H:%M:%S"
+        # Evita duplicação de handlers se get_logger for chamado várias vezes
+        if logger.hasHandlers():
+            logger.handlers.clear()
 
-    # --- HANDLER 1: TERMINAL (Colorido) ---
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(colorlog.ColoredFormatter(
-        log_format,
-        datefmt=date_format,
-        log_colors={
-            'DEBUG': 'blue',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'bold_red,bg_white',
-        }
-    ))
-    logger.addHandler(stream_handler)
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
 
-    # --- HANDLER 2: ARQUIVO (Completo e Rotativo) ---
-    # Salva em arquivo, cria um novo quando chegar a 5MB, mantém os últimos 3
-    file_handler = RotatingFileHandler(
-        f"{LOG_DIR}/app.log", maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
-    )
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
-    ))
-    # No arquivo gravamos apenas de INFO para cima (ou DEBUG se quiser tudo)
-    file_handler.setLevel(logging.INFO) 
-    logger.addHandler(file_handler)
+        # 1. Handler de Console (Terminal)
+        if cls._config.get("console_enabled"):
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
 
-    return logger
+        # 2. Handler de Arquivo (Rotação Diária)
+        if cls._config.get("file_enabled"):
+            filename = os.path.join(LOG_DIR, "app.log")
+            # Roda a cada meia-noite (midnight), mantém backup por X dias (backupCount)
+            file_handler = TimedRotatingFileHandler(
+                filename,
+                when="midnight",
+                interval=1,
+                backupCount=cls._config.get("retention_days", 7),
+                encoding="utf-8"
+            )
+            # Sufixo do arquivo rotacionado: app_2024-05-25.log
+            file_handler.suffix = "%Y-%m-%d.log"
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+        return logger
+
+    @classmethod
+    def _load_config(cls):
+        """Carrega configuração do arquivo JSON se existir"""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r") as f:
+                    cls._config.update(json.load(f))
+            except Exception as e:
+                print(f"Erro ao carregar log_config.json: {e}")
+
+    @classmethod
+    def update_config(cls, new_config):
+        """Atualiza a configuração em tempo real e salva no disco"""
+        cls._config.update(new_config)
+        try:
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(cls._config, f, indent=4)
+        except Exception as e:
+            print(f"Erro ao salvar log_config.json: {e}")
+
+# Função helper global para fácil importação
+def get_logger(name="TripHub"):
+    return TripHubLogger.get_logger(name)

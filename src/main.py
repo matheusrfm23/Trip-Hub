@@ -19,13 +19,23 @@ logger = logging.getLogger("TripHub.Main")
 async def main(page: ft.Page):
     logger.info(">>> STARTUP: Iniciando Trip Hub...")
 
-    # --- 1. Verificação de Integridade ---
+    # --- 1. Inicialização do Banco de Dados (CRÍTICO: Deve ser o primeiro) ---
+    try:
+        db = Database()
+        db.initialize()
+        logger.info("Banco de dados conectado e inicializado.")
+    except Exception as e:
+        logger.critical(f"FALHA CRÍTICA NO BANCO DE DADOS: {e}")
+        # Em caso de falha crítica no DB, talvez seja melhor não continuar ou mostrar erro na UI
+        # Mas seguiremos o fluxo original tentando recuperar o que der
+
+    # --- 2. Verificação de Integridade (Agora seguro pois o DB existe) ---
     try:
         await AuthService.perform_integrity_check()
     except Exception as e:
         logger.error(f"Erro na verificação de integridade: {e}")
 
-    # --- 2. Configuração Visual ---
+    # --- 3. Configuração Visual ---
     page.title = AppConfig.WINDOW_TITLE
     page.window_width = 400
     page.window_height = 800
@@ -33,14 +43,6 @@ async def main(page: ft.Page):
     page.bgcolor = ft.Colors.BLACK
     page.padding = 0
     page.spacing = 0
-
-    # --- 3. Infraestrutura ---
-    try:
-        db = Database()
-        db.initialize()
-        logger.info("Banco de dados conectado.")
-    except Exception as e:
-        logger.critical(f"FALHA NO BANCO DE DADOS: {e}")
 
     # Modal Global
     modal_preview = ModalPreview(page)
@@ -69,8 +71,6 @@ if __name__ == "__main__":
     print(f"📡 ACESSO LOCAL (Neste PC):   http://localhost:{PORTA}")
     
     # Lógica inteligente para Docker:
-    # Se o IP detectado for interno do Docker (começa com 172 ou 10), avisa o usuário
-    # para usar o IP real da máquina (Host).
     if MEU_IP.startswith("172.") or MEU_IP.startswith("10."):
         print(f"📱 ACESSO EXTERNO (WIFI):   O app está rodando isolado no Docker.")
         print(f"                           Descubra o IP do seu PC na rede (ipconfig/ifconfig)")
