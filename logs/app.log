@@ -1,0 +1,18 @@
+2026-02-23 17:56:33 | INFO     | AuthService     | Tentando criar perfil: Test User
+2026-02-23 17:56:33 | INFO     | AuthService     | Perfil criado: Test User (cff86377-c364-4b50-954e-139887e35728)
+2026-02-23 17:56:33 | INFO     | AuthService     | Login realizado com sucesso: Test User
+2026-02-23 17:56:33 | INFO     | AuthService     | Perfil atualizado: cff86377-c364-4b50-954e-139887e35728
+2026-02-23 17:56:33 | WARNING  | AuthService     | Solicitação de exclusão de perfil: cff86377-c364-4b50-954e-139887e35728
+2026-02-23 17:56:33 | INFO     | AuthService     | Perfil excluído com sucesso: cff86377-c364-4b50-954e-139887e35728
+2026-02-23 17:56:33 | INFO     | AuthService     | Iniciando Verificação de Integridade dos Dados...
+2026-02-23 17:56:33 | INFO     | FlightService   | Cache de voos carregado: 0 registros.
+2026-02-23 17:56:33 | INFO     | AuthService     | Verificação Concluída. 0 perfis ativos.
+2026-02-23 17:56:56 | INFO     | AuthService     | Tentando criar perfil: Test User
+2026-02-23 17:56:56 | INFO     | AuthService     | Perfil criado: Test User (f2fb28a7-74ff-4758-a4ae-4d5bf8462b7f)
+2026-02-23 17:56:56 | INFO     | AuthService     | Login realizado com sucesso: Test User
+2026-02-23 17:56:56 | INFO     | AuthService     | Perfil atualizado: f2fb28a7-74ff-4758-a4ae-4d5bf8462b7f
+2026-02-23 17:56:56 | WARNING  | AuthService     | Solicitação de exclusão de perfil: f2fb28a7-74ff-4758-a4ae-4d5bf8462b7f
+2026-02-23 17:56:56 | INFO     | AuthService     | Perfil excluído com sucesso: f2fb28a7-74ff-4758-a4ae-4d5bf8462b7f
+2026-02-23 17:56:56 | INFO     | AuthService     | Iniciando Verificação de Integridade dos Dados...
+2026-02-23 17:56:56 | INFO     | FlightService   | Cache de voos carregado: 0 registros.
+2026-02-23 17:56:56 | INFO     | AuthService     | Verificação Concluída. 0 perfis ativos.

@@ -1,30 +1,19 @@
-# ARQUIVO: src/logic/auth_service.py
 import json
-import os
 import uuid
 import time
+import os
 import asyncio
+from src.data.database import Database
 from src.logic.flight_service import FlightService
 from src.logic.finance_service import FinanceService
-from src.core.locker import file_lock
 from src.core.logger import get_logger
-from src.core.profiler import monitor
+from src.core.profiler import track_execution
 
-# Inicializa o logger específico para este serviço
 log = get_logger("AuthService")
 
 class AuthService:
-    FILE_PATH = os.path.join("assets", "data", "profiles.json")
-    CACHE_PATH = os.path.join("assets", "data", "cache.json") 
-    # [CORREÇÃO] Lê do ambiente ou usa fallback seguro
+    # Lê do ambiente ou usa fallback seguro
     MASTER_PIN = os.getenv("MASTER_PIN", "0000")
-
-    # --- CAMADA DE CACHE (RAM) ---
-    # Armazena a lista pura para iterações
-    _cache_profiles = None 
-    # Armazena um mapa {id: profile} para acesso O(1) imediato
-    _cache_map = None
-    # -----------------------------
 
     TEMPLATE_CONTACT = {
         "phone": "", "email": "", 
@@ -44,230 +33,256 @@ class AuthService:
     }
 
     @classmethod
-    def _init_db(cls):
-        """Garante que o arquivo físico existe."""
-        os.makedirs(os.path.dirname(cls.FILE_PATH), exist_ok=True)
-        if not os.path.exists(cls.FILE_PATH):
-            with file_lock():
-                with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump([], f, indent=4, ensure_ascii=False)
+    def _row_to_dict(cls, row):
+        """Converte sqlite3.Row para dicionário e processa colunas JSON."""
+        if not row:
+            return None
+
+        user = dict(row)
+
+        # Colunas que armazenam JSON strings
+        json_cols = ["privacy", "contact", "medical", "last_location"]
+
+        for col in json_cols:
+            val = user.get(col)
+            if val and str(val).strip():
+                try:
+                    user[col] = json.loads(val)
+                except Exception as e:
+                    # Fallback para dados legados ou strings puras em last_location
+                    if col == "last_location":
+                        user[col] = val
+                    else:
+                        log.error(f"Erro ao decodificar JSON da coluna {col}: {e}")
+                        user[col] = {}
+            else:
+                 # Valores padrão para campos vazios
+                 if col == "last_location":
+                     user[col] = ""
+                 else:
+                     user[col] = {}
+
+        return user
 
     @classmethod
-    def _refresh_cache(cls):
-        """
-        Lê do disco e reconstrói o cache de memória.
-        Deve ser chamado na inicialização ou quando houver dúvida de integridade.
-        """
-        cls._init_db()
-        try:
-            with open(cls.FILE_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                cls._cache_profiles = data
-                # Reconstrói o mapa de acesso rápido
-                cls._cache_map = {str(p["id"]): p for p in data}
-        except Exception as e:
-            log.error(f"Erro ao carregar cache do disco: {e}")
-            cls._cache_profiles = []
-            cls._cache_map = {}
-
-    @classmethod
-    def _ensure_cache(cls):
-        """Lazy loader para o cache."""
-        if cls._cache_profiles is None:
-            cls._refresh_cache()
-
-    @classmethod
-    @monitor(threshold=2.0) 
+    @track_execution(threshold=2.0)
     async def perform_integrity_check(cls):
-        """Orquestrador de limpeza de dados"""
+        """Orquestrador de limpeza de dados via SQLite"""
         log.info("Iniciando Verificação de Integridade dos Dados...")
         
-        # Força atualização do disco para garantir estado fresco no boot
-        cls._refresh_cache() 
-        
-        valid_ids = list(cls._cache_map.keys())
-        
-        # Limpezas externas
-        FlightService.clean_orphaned_flights(valid_ids)
-        await FinanceService.clean_orphaned_finances(valid_ids)
-        
-        log.info(f"Verificação Concluída. {len(valid_ids)} perfis ativos.")
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users")
+            rows = cursor.fetchall()
+            valid_ids = [row["id"] for row in rows]
+
+            # Limpezas externas
+            FlightService.clean_orphaned_flights(valid_ids)
+            await FinanceService.clean_orphaned_finances(valid_ids)
+
+            log.info(f"Verificação Concluída. {len(valid_ids)} perfis ativos.")
+        except Exception as e:
+            log.error(f"Erro na verificação de integridade: {e}")
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def get_profiles(cls):
-        """Retorna todos os perfis (Leitura de RAM)."""
-        cls._ensure_cache()
-        return cls._cache_profiles
+        """Retorna todos os perfis do SQLite."""
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users")
+            rows = cursor.fetchall()
+            return [cls._row_to_dict(row) for row in rows]
+        except Exception as e:
+            log.error(f"Erro ao buscar perfis: {e}")
+            return []
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def get_user_by_id(cls, user_id):
-        """
-        Busca usuário por ID com performance O(1).
-        Ideal para uso intensivo no Router.
-        """
-        cls._ensure_cache()
-        # Busca direta no Hash Map (Instantâneo)
-        return cls._cache_map.get(str(user_id))
+        """Busca usuário por ID."""
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE id = ?", (str(user_id),))
+            row = cursor.fetchone()
+            return cls._row_to_dict(row)
+        except Exception as e:
+            log.error(f"Erro ao buscar usuário {user_id}: {e}")
+            return None
+        finally:
+            conn.close()
 
     @classmethod
-    @monitor(threshold=0.5)
+    @track_execution(threshold=0.5)
     async def login(cls, user_id, pin):
-        """Login otimizado via RAM."""
-        user = await cls.get_user_by_id(user_id)
-        
-        if user and str(user.get("pin")) == str(pin):
-            log.info(f"Login realizado com sucesso: {user['name']}")
-            return user
+        """Login direto no banco."""
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE id = ? AND pin = ?", (str(user_id), str(pin)))
+            row = cursor.fetchone()
             
-        log.warning(f"Falha de login para ID: {user_id}")
-        return None
+            user = cls._row_to_dict(row)
+            if user:
+                log.info(f"Login realizado com sucesso: {user['name']}")
+                return user
+
+            log.warning(f"Falha de login para ID: {user_id}")
+            return None
+        except Exception as e:
+            log.error(f"Erro no login: {e}")
+            return None
+        finally:
+            conn.close()
 
     @classmethod
-    @monitor(threshold=1.0)
+    @track_execution(threshold=1.0)
     async def create_profile(cls, name, pin):
+        conn = Database.get_connection()
         try:
             log.info(f"Tentando criar perfil: {name}")
-            cls._ensure_cache()
+            cursor = conn.cursor()
             
-            role = "ADMIN" if len(cls._cache_profiles) == 0 else "USER"
+            # Verifica se já existem usuários para definir ROLE
+            cursor.execute("SELECT COUNT(*) as count FROM users")
+            row = cursor.fetchone()
+            count = row["count"] if row else 0
+            role = "ADMIN" if count == 0 else "USER"
+            
+            new_id = str(uuid.uuid4())
+            
+            # Dados iniciais serializados
+            privacy = json.dumps({"passport": False, "medical": True}, ensure_ascii=False)
+            contact = json.dumps(cls.TEMPLATE_CONTACT, ensure_ascii=False)
+            medical = json.dumps(cls.TEMPLATE_MEDICAL, ensure_ascii=False)
+            last_location = json.dumps("", ensure_ascii=False)
+            
+            cursor.execute('''
+                INSERT INTO users (
+                    id, name, role, pin, avatar, passport, cpf, rg,
+                    privacy, contact, medical, last_seen, last_location, status_msg
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                new_id, name, role, pin, None, "", "", "",
+                privacy, contact, medical, 0, last_location, "Disponível"
+            ))
 
-            new_user = {
-                "id": str(uuid.uuid4()),
-                "name": name,
-                "role": role,
-                "pin": pin,
-                "avatar": None,
-                "passport": "",
-                "cpf": "",
-                "rg": "",
-                "privacy": {"passport": False, "medical": True},
-                "contact": cls.TEMPLATE_CONTACT.copy(),
-                "medical": cls.TEMPLATE_MEDICAL.copy(),
-                "last_seen": 0,
-                "last_location": "",
-                "status_msg": "Disponível"
-            }
-            
-            # 1. Atualiza RAM (Write-Through)
-            cls._cache_profiles.append(new_user)
-            cls._cache_map[new_user["id"]] = new_user
-            
-            # 2. Persiste no Disco
-            with file_lock():
-                with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
-            
-            log.info(f"Perfil criado: {name} ({new_user['id']})")
+            conn.commit()
+            log.info(f"Perfil criado: {name} ({new_id})")
             return True
         except Exception as e:
             log.error(f"Erro crítico ao criar perfil: {e}")
             return False
+        finally:
+            conn.close()
 
     @classmethod
-    @monitor(threshold=0.5)
+    @track_execution(threshold=0.5)
     async def update_profile_general(cls, profile_id, updates):
+        conn = Database.get_connection()
         try:
-            cls._ensure_cache()
-            user = cls._cache_map.get(str(profile_id))
+            # Lista de colunas permitidas para evitar SQL Injection via chaves do dict
+            allowed_cols = [
+                "name", "role", "pin", "avatar", "passport", "cpf", "rg",
+                "privacy", "contact", "medical", "last_seen", "last_location", "status_msg"
+            ]
             
-            if user:
-                # 1. Atualiza objeto na RAM (Reference Update)
-                user.update(updates)
+            set_clauses = []
+            values = []
+
+            for key, value in updates.items():
+                if key in allowed_cols:
+                    set_clauses.append(f"{key} = ?")
+                    # Se for dict/list, dump para JSON
+                    if isinstance(value, (dict, list)):
+                        values.append(json.dumps(value, ensure_ascii=False))
+                    else:
+                        values.append(value)
+
+            if not set_clauses:
+                return False
                 
-                # 2. Persiste lista completa no disco
-                with file_lock():
-                    with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
-                        
+            values.append(str(profile_id))
+            sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"
+
+            cursor = conn.cursor()
+            cursor.execute(sql, values)
+            conn.commit()
+
+            if cursor.rowcount > 0:
                 log.info(f"Perfil atualizado: {profile_id}")
                 return True
             return False
         except Exception as e: 
             log.error(f"Erro ao atualizar perfil: {e}")
             return False
+        finally:
+            conn.close()
 
     @classmethod
-    @monitor(threshold=0.2)
+    @track_execution(threshold=0.2)
     async def update_presence(cls, user_id, location=None, status_msg=None, is_heartbeat=False):
-        """
-        Atualiza dados voláteis. 
-        Otimizado: Atualiza RAM instantaneamente, depois disco.
-        """
+        conn = Database.get_connection()
         try:
-            cls._ensure_cache()
-            user = cls._cache_map.get(str(user_id))
+            set_clauses = ["last_seen = ?"]
+            values = [time.time()]
             
-            if user:
-                # Atualização Atômica na RAM (Instantânea para a UI)
-                user["last_seen"] = time.time()
-                if location is not None:
-                    user["last_location"] = location
-                if status_msg is not None:
-                    user["status_msg"] = status_msg
+            if location is not None:
+                set_clauses.append("last_location = ?")
+                if isinstance(location, (dict, list)):
+                     values.append(json.dumps(location, ensure_ascii=False))
+                else:
+                     values.append(str(location))
                 
-                # Persistência (Pode ser removida se quiser que presença seja 100% volátil)
-                # Mantivemos para garantir estado entre reboots, mas com lock seguro.
-                with file_lock():
-                    with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
-                
-                return True
-            return False
+            if status_msg is not None:
+                set_clauses.append("status_msg = ?")
+                values.append(status_msg)
+            
+            values.append(str(user_id))
+            
+            sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"
+            
+            cursor = conn.cursor()
+            cursor.execute(sql, values)
+            conn.commit()
+            
+            return True
         except Exception as e:
+            if not is_heartbeat:
+                log.error(f"Erro ao atualizar presença: {e}")
             return False
+        finally:
+            conn.close()
 
     @classmethod
-    @monitor(threshold=1.0)
+    @track_execution(threshold=1.0)
     async def delete_profile(cls, profile_id):
+        log.warning(f"Solicitação de exclusão de perfil: {profile_id}")
+        conn = Database.get_connection()
         try:
-            log.warning(f"Solicitação de exclusão de perfil: {profile_id}")
-            cls._ensure_cache()
-            
-            # Filtra na RAM
-            cls._cache_profiles = [p for p in cls._cache_profiles if str(p["id"]) != str(profile_id)]
-            # Reconstrói Mapa RAM
-            cls._cache_map = {str(p["id"]): p for p in cls._cache_profiles}
-            
-            # Persiste Disco
-            with file_lock():
-                with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
-            
-            # Limpeza de dados órfãos
-            await cls.perform_integrity_check()
-            
-            log.info(f"Perfil excluído com sucesso: {profile_id}")
-            return True
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM users WHERE id = ?", (str(profile_id),))
+            conn.commit()
+
+            deleted = cursor.rowcount > 0
+            if deleted:
+                log.info(f"Perfil excluído com sucesso: {profile_id}")
+            else:
+                 log.warning(f"Perfil não encontrado para exclusão: {profile_id}")
+
+            return deleted
         except Exception as e:
             log.critical(f"Erro Crítico ao Deletar: {e}")
             return False
-
-    # --- MÉTODOS DE CACHE DE SESSÃO LOCAL (Client Side Helpers) ---
-    @classmethod
-    def save_cached_login(cls, user_id):
-        try:
-            os.makedirs(os.path.dirname(cls.CACHE_PATH), exist_ok=True)
-            with file_lock():
-                with open(cls.CACHE_PATH, "w", encoding="utf-8") as f:
-                    json.dump({"last_user_id": user_id}, f)
-        except Exception as e:
-            log.error(f"Erro ao salvar cache: {e}")
-
-    @classmethod
-    def get_cached_login(cls):
-        if not os.path.exists(cls.CACHE_PATH):
-            return None
-        try:
-            with open(cls.CACHE_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("last_user_id")
-        except:
-            return None
-
-    @classmethod
-    def clear_cached_login(cls):
-        if os.path.exists(cls.CACHE_PATH):
-            try:
-                with file_lock():
-                    os.remove(cls.CACHE_PATH)
-            except: pass
+        finally:
+            conn.close()
+            # Se deletou, roda integridade (cria nova conexão dentro do método)
+            if 'deleted' in locals() and deleted:
+                await cls.perform_integrity_check()
