@@ -57,7 +57,7 @@ async def main(page: ft.Page):
     
     # Previne tela branca inicial chamando o router manualmente
     await router.route_change(initial_route) 
-    page.push_route(initial_route)
+    await page.push_route(initial_route)
 
 if __name__ == "__main__":
     
