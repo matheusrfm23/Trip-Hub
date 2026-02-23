@@ -16,3 +16,6 @@
 2026-02-23 17:56:56 | INFO     | AuthService     | Iniciando Verificação de Integridade dos Dados...
 2026-02-23 17:56:56 | INFO     | FlightService   | Cache de voos carregado: 0 registros.
 2026-02-23 17:56:56 | INFO     | AuthService     | Verificação Concluída. 0 perfis ativos.
+2026-02-23 18:12:40 | INFO     | PlaceService    | Local adicionado: Hotel Test (e7ef1be4-4e12-4e04-8de2-06b8d8d3094d)
+2026-02-23 18:12:40 | INFO     | PlaceService    | Local atualizado: e7ef1be4-4e12-4e04-8de2-06b8d8d3094d
+2026-02-23 18:12:40 | INFO     | PlaceService    | Local removido: e7ef1be4-4e12-4e04-8de2-06b8d8d3094d

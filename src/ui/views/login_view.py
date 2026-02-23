@@ -185,9 +185,8 @@ class LoginView(ft.View):
         self.pin_field.value = ""
         self.pin_error.value = ""
         self.pin_field.disabled = False
-        if self.pin_dialog not in self.main_page.overlay:
-            self.main_page.overlay.append(self.pin_dialog)
-        self.pin_dialog.open = True
+        # [ATUALIZADO] Flet 0.80+ usa page.open(dialog)
+        self.main_page.open(self.pin_dialog)
         self.main_page.update()
         try: await self.pin_field.focus()
         except: pass
@@ -204,27 +203,22 @@ class LoginView(ft.View):
         user = await AuthService.login(user_id, pin)
 
         if user:
-            self.pin_dialog.open = False
+            self.main_page.close(self.pin_dialog) # [ATUALIZADO]
             self.main_page.user_profile = user
             
-            # --- BLINDAGEM DE STORAGE & CACHE ---
+            # --- BLINDAGEM DE STORAGE ---
             try:
                 # Salva sessão no navegador (Flet Client Storage)
                 if hasattr(self.main_page, "client_storage") and self.main_page.client_storage:
                     self.main_page.client_storage.set("user_id", str(user["id"]))
                 
-                # Salva cache local no servidor (Server Side) para recuperação rápida
-                AuthService.save_cached_login(user["id"])
+                # [REMOVIDO] AuthService.save_cached_login(user["id"])
+                # A persistência agora é 100% responsabilidade do client_storage
             except Exception as ex:
                 logger.warning(f"Não foi possível salvar sessão: {ex}")
             # ---------------------------
             
-            self._close_dialogs(None)
-            
             # [CORREÇÃO CRÍTICA DE ROTA]
-            # Se a URL já for /dashboard (porque o Router bloqueou e mostrou login),
-            # o comando .go("/dashboard") não dispara evento de rota.
-            # Redirecionamos para "/" que o Router automaticamente jogará para o dashboard.
             if self.main_page.route == "/dashboard":
                 logger.info("Rota presa em /dashboard detectada. Redirecionando via root.")
                 self.main_page.go("/")
@@ -240,16 +234,16 @@ class LoginView(ft.View):
     async def _open_add_dialog(self, e):
         self.new_name.value = ""
         self.new_pin.value = ""
-        if self.add_dialog not in self.main_page.overlay:
-            self.main_page.overlay.append(self.add_dialog)
-        self.add_dialog.open = True
+        # [ATUALIZADO] Flet 0.80+ usa page.open(dialog)
+        self.main_page.open(self.add_dialog)
         self.main_page.update()
         try: await self.new_name.focus()
         except: pass
 
     def _close_dialogs(self, e):
-        self.pin_dialog.open = False
-        self.add_dialog.open = False
+        # [ATUALIZADO] Flet 0.80+ usa page.close(dialog)
+        self.main_page.close(self.pin_dialog)
+        self.main_page.close(self.add_dialog)
         self.main_page.update()
 
     def _on_dialog_dismiss(self, e):
@@ -257,12 +251,12 @@ class LoginView(ft.View):
         self.pin_error.value = ""
         self.selected_profile = None
         self.pin_field.disabled = False
-        self.main_page.overlay.clear()
+        # self.main_page.overlay.clear() # Não necessário com page.close()
         self.main_page.update()
 
     async def _save_profile(self, e):
         if self.new_name.value and len(self.new_pin.value) == 4:
-            self.add_dialog.open = False
+            self.main_page.close(self.add_dialog) # [ATUALIZADO]
             self.main_page.update()
             self.loader.visible = True
             self.update()
