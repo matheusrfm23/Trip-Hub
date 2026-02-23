@@ -39,6 +39,9 @@ class TripHubLogger:
         log_level = cls.LEVEL_MAP.get(level_name, logging.INFO)
         logger.setLevel(log_level)
 
+        # Evita duplicação com o root logger
+        logger.propagate = False
+
         # Evita duplicação de handlers se get_logger for chamado várias vezes
         if logger.hasHandlers():
             logger.handlers.clear()

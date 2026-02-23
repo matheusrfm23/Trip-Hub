@@ -238,7 +238,7 @@ class Database:
                 # Apenas renomeia se o commit foi bem sucedido
                 for filepath in files_to_rename:
                     try:
-                        os.rename(filepath, filepath + ".bak")
+                        os.replace(filepath, filepath + ".bak")
                         log.info(f"Arquivo renomeado: {os.path.basename(filepath)} -> .bak")
                     except OSError as e:
                         log.error(f"Erro ao renomear {filepath}: {e}")
