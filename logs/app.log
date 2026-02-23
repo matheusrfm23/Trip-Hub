@@ -19,3 +19,6 @@
 2026-02-23 18:12:40 | INFO     | PlaceService    | Local adicionado: Hotel Test (e7ef1be4-4e12-4e04-8de2-06b8d8d3094d)
 2026-02-23 18:12:40 | INFO     | PlaceService    | Local atualizado: e7ef1be4-4e12-4e04-8de2-06b8d8d3094d
 2026-02-23 18:12:40 | INFO     | PlaceService    | Local removido: e7ef1be4-4e12-4e04-8de2-06b8d8d3094d
+2026-02-23 18:59:22 | INFO     | FlightService   | Voo adicionado: ABC
+2026-02-23 18:59:22 | INFO     | FlightService   | Voo atualizado: 918f365a-2d34-4829-be9e-ce85bc08cde2
+2026-02-23 18:59:22 | INFO     | FlightService   | Voo removido: 918f365a-2d34-4829-be9e-ce85bc08cde2

@@ -45,6 +45,8 @@ class DebtManager:
         except Exception as e: print(f"Erro render debts: {e}")
 
     async def _refresh_history(self):
+        # [CORREÇÃO] Verifica se ainda está na página antes de processar
+        if not self.container.page: return
         c_name = self._get_profile_name(self.selected_contact_id)
         await self._load_history(self.selected_contact_id, c_name)
 
@@ -69,7 +71,7 @@ class DebtManager:
     async def _select_contact(self, contact_id, contact_name):
         self.selected_contact_id = contact_id
         await self.render_carousel() 
-        await self._load_history(contact_id, contact_name)
+        if self.container.page: await self._load_history(contact_id, contact_name)
 
     async def _load_history(self, contact_id, contact_name):
         self.debt_detail_title.value = f"Extrato com {contact_name}"
