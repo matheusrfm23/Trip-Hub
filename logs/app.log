@@ -22,3 +22,4 @@
 2026-02-23 18:59:22 | INFO     | FlightService   | Voo adicionado: ABC
 2026-02-23 18:59:22 | INFO     | FlightService   | Voo atualizado: 918f365a-2d34-4829-be9e-ce85bc08cde2
 2026-02-23 18:59:22 | INFO     | FlightService   | Voo removido: 918f365a-2d34-4829-be9e-ce85bc08cde2
+2026-02-23 19:18:12 | INFO     | ChatService     | Enviando msg de u1 para u2
