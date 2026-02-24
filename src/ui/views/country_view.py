@@ -4,7 +4,18 @@ from src.ui.components.content_factory import ContentFactory
 
 class CountryView(ft.View):
     def __init__(self, page: ft.Page, country_code: str):
-        super().__init__(route=f"/country/{country_code}", padding=0, bgcolor=ft.Colors.BLACK)
+        # [CORREÇÃO] Passa o FAB diretamente para o construtor da View
+        super().__init__(
+            route=f"/country/{country_code}",
+            padding=0,
+            bgcolor=ft.Colors.BLACK,
+            floating_action_button=ft.FloatingActionButton(
+                icon=ft.Icons.ADD,
+                bgcolor=ft.Colors.CYAN,
+                on_click=self._on_fab_click,
+                visible=False # Invisível por padrão, até carregar conteúdo
+            )
+        )
         self.main_page = page
         self.current_country = country_code
         self.current_category = "hotel"
@@ -50,14 +61,6 @@ class CountryView(ft.View):
         # --- ÁREA DE CONTEÚDO ---
         self.content_area = ft.Container(expand=True, bgcolor=ft.Colors.BLACK)
         
-        # --- FAB (Floating Action Button) ---
-        # [RESTAURADO E POLIDO]
-        self.floating_action_button = ft.FloatingActionButton(
-            icon=ft.Icons.ADD,
-            bgcolor=ft.Colors.CYAN,
-            on_click=self._on_fab_click
-        )
-
         # Carrega o conteúdo inicial
         self._load_content(should_update=False)
 
@@ -119,20 +122,17 @@ class CountryView(ft.View):
     def _load_content(self, should_update=True):
         try:
             # Obtém o conteúdo da Factory
-            # Nota: O conteúdo retornado pode ser um PlaceTab ou um CalculatorWrapper
             new_content = ContentFactory.get_content(self.main_page, self.current_country, self.current_category)
             self.content_area.content = new_content
 
-            # [LÓGICA FAB] Mostra o FAB apenas se o conteúdo suportar adição (tiver o método open_add_dialog)
+            # [LÓGICA FAB] Mostra o FAB apenas se o conteúdo suportar adição
             has_add_feature = hasattr(new_content, "open_add_dialog")
-
-            # Atualiza a visibilidade do FAB
             if self.floating_action_button:
                 self.floating_action_button.visible = has_add_feature
 
             if should_update:
                 self.content_area.update()
-                # Atualiza o FAB na view (precisa chamar update da view ou do FAB se já montado)
+                # Atualiza a view para refletir mudança no FAB
                 if self.page: self.update()
         except Exception as e:
             print(f"Erro ao carregar factory: {e}")

@@ -190,6 +190,7 @@ class QGProfileSheetManager:
         self.page.update()
 
     def _confirm_delete_profile(self, e):
+        # [CORREÇÃO] Garante uso de overlay.append
         if self.confirm_delete_dialog not in self.page.overlay:
             self.page.overlay.append(self.confirm_delete_dialog)
         self.confirm_delete_dialog.open = True

@@ -26,8 +26,9 @@ class PlaceService:
             try: extra_data = json.loads(data["extra_data"])
             except: pass
 
-        # 2. Flatten extra_data into main dict (CORREÇÃO PEDIDA)
-        data.update(extra_data)
+        # 2. Flatten extra_data into main dict (CORREÇÃO CRÍTICA)
+        if extra_data:
+            data.update(extra_data)
 
         # 3. Remove raw JSON columns to clean up
         if "extra_data" in data: del data["extra_data"]
