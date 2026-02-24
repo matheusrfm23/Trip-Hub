@@ -1,3 +1,7 @@
+# ARQUIVO: src/ui/components/places/place_form.py
+# CHANGE LOG:
+# - Formulário modernizado com border_radius, filled=True, agrupamento de datas e layout fluido para Mobile.
+
 import flet as ft
 
 class PlaceForm:
@@ -7,35 +11,44 @@ class PlaceForm:
         self.dialog = None 
         self.item_id = None
         
-        self.name_field = ft.TextField(label="Nome do Local", border_color=ft.Colors.CYAN)
-        self.address_field = ft.TextField(label="Endereço", multiline=True, min_lines=2)
-        self.maps_link_field = ft.TextField(label="Link Maps", icon=ft.Icons.LINK)
-        
-        self.price_field = ft.TextField(
-            label="Preço Médio", 
-            prefix=ft.Text("R$ "), 
-            keyboard_type=ft.KeyboardType.NUMBER, 
-            width=140
-        )
-        
-        self.desc_field = ft.TextField(label="Descrição / Notas", multiline=True)
+        # Campos Modernizados
+        def create_field(label, icon=None, prefix=None, **kwargs):
+            return ft.TextField(
+                label=label, 
+                prefix_icon=icon, 
+                prefix=prefix,
+                border_radius=12, 
+                filled=True, 
+                bgcolor=ft.Colors.BLACK26,
+                border_color=ft.Colors.CYAN_700,
+                focused_border_color=ft.Colors.CYAN_300,
+                text_size=14,
+                **kwargs
+            )
 
-        # Campos de Hospedagem (Datas Claras)
-        self.checkin_field = ft.TextField(label="Dia de Entrada (Check-in)", hint_text="Ex: 20/12 às 14h", icon=ft.Icons.LOGIN)
-        self.checkout_field = ft.TextField(label="Dia de Saída (Check-out)", hint_text="Ex: 27/12 às 11h", icon=ft.Icons.LOGOUT)
+        self.name_field = create_field("Nome do Local", icon=ft.Icons.TITLE)
+        self.address_field = create_field("Endereço", multiline=True, min_lines=2, icon=ft.Icons.LOCATION_ON)
+        self.maps_link_field = create_field("Link Google Maps", icon=ft.Icons.LINK)
         
-        self.wifi_ssid = ft.TextField(label="Rede WiFi", prefix_icon=ft.Icons.WIFI)
-        self.wifi_pass = ft.TextField(label="Senha WiFi") 
+        self.price_field = create_field("Preço", prefix=ft.Text("R$ "), keyboard_type=ft.KeyboardType.NUMBER, expand=True)
+        self.desc_field = create_field("Descrição / Notas", multiline=True, min_lines=2)
+
+        # Campos de Hospedagem
+        self.checkin_field = create_field("Check-in", hint_text="20/12 14h", expand=True)
+        self.checkout_field = create_field("Check-out", hint_text="27/12 11h", expand=True)
+        
+        self.wifi_ssid = create_field("Rede WiFi", icon=ft.Icons.WIFI, expand=True)
+        self.wifi_pass = create_field("Senha WiFi", icon=ft.Icons.PASSWORD, expand=True) 
         
         self.switches = {
-            "has_towels": ft.Switch(label="Toalhas"),
-            "has_linen": ft.Switch(label="Roupa Cama"),
-            "has_hot_shower": ft.Switch(label="Chuveiro Quente"),
-            "has_pool": ft.Switch(label="Piscina"),
-            "has_ac": ft.Switch(label="Ar Cond."),
-            "has_parking": ft.Switch(label="Garagem"),
-            "has_kitchen": ft.Switch(label="Cozinha"),
-            "has_tv": ft.Switch(label="TV Smart")
+            "has_towels": ft.Switch(label="Toalhas", active_color=ft.Colors.CYAN),
+            "has_linen": ft.Switch(label="Cama", active_color=ft.Colors.CYAN),
+            "has_hot_shower": ft.Switch(label="Chuveiro", active_color=ft.Colors.CYAN),
+            "has_pool": ft.Switch(label="Piscina", active_color=ft.Colors.CYAN),
+            "has_ac": ft.Switch(label="Ar Cond.", active_color=ft.Colors.CYAN),
+            "has_parking": ft.Switch(label="Vaga", active_color=ft.Colors.CYAN),
+            "has_kitchen": ft.Switch(label="Cozinha", active_color=ft.Colors.CYAN),
+            "has_tv": ft.Switch(label="TV Smart", active_color=ft.Colors.CYAN)
         }
 
     def open(self, category, item=None):
@@ -45,54 +58,54 @@ class PlaceForm:
         self._populate_fields(item, is_hotel)
 
         content_controls = [
-            ft.Text("Editar" if item else "Novo Local", size=20, weight="bold", color=ft.Colors.CYAN),
-            ft.Divider(),
+            ft.Text("Editar Local" if item else "Novo Local", size=22, weight="bold", color=ft.Colors.CYAN_300),
+            ft.Divider(color=ft.Colors.WHITE10),
             self.name_field,
             self.address_field,
             self.maps_link_field,
-            self.price_field,
-            ft.Divider(),
+            ft.Row([self.price_field], expand=True),
             self.desc_field
         ]
 
         if is_hotel:
             extra_hotel = [
-                ft.Divider(height=10, color="transparent"),
-                ft.Text("Datas da Viagem", weight="bold", color=ft.Colors.ORANGE_300),
-                self.checkin_field,
-                self.checkout_field,
-                ft.Divider(),
-                ft.Text("Conectividade", weight="bold"),
-                self.wifi_ssid,
-                self.wifi_pass,
-                ft.Divider(),
-                ft.Text("Comodidades Disponíveis", weight="bold", color=ft.Colors.CYAN_200),
+                ft.Divider(height=20, color=ft.Colors.WHITE10),
+                ft.Text("Datas da Viagem", weight="bold", color=ft.Colors.ORANGE_300, size=12),
+                ft.Row([self.checkin_field, self.checkout_field], spacing=10),
                 
+                ft.Container(height=10),
+                ft.Text("Conectividade", weight="bold", color=ft.Colors.CYAN_200, size=12),
+                ft.Row([self.wifi_ssid, self.wifi_pass], spacing=10),
+                
+                ft.Container(height=10),
+                ft.Text("Comodidades Disponíveis", weight="bold", color=ft.Colors.CYAN_200, size=12),
                 ft.Container(
+                    bgcolor=ft.Colors.BLACK26, border_radius=12, padding=10,
                     content=ft.Row(
                         controls=list(self.switches.values()),
                         wrap=True,      
                         spacing=10,
-                        run_spacing=10
-                    ),
-                    padding=5
+                        run_spacing=5
+                    )
                 )
             ]
-            content_controls[6:6] = extra_hotel
+            content_controls.extend(extra_hotel)
 
-        content_controls.append(ft.Container(height=20))
+        content_controls.append(ft.Container(height=10))
         content_controls.append(
-            ft.ElevatedButton("Salvar", icon=ft.Icons.SAVE, bgcolor=ft.Colors.CYAN, color=ft.Colors.BLACK, on_click=self._save, width=float("inf"))
+            ft.ElevatedButton("SALVAR INFORMAÇÕES", icon=ft.Icons.CHECK, bgcolor=ft.Colors.CYAN_600, color=ft.Colors.WHITE, height=50, on_click=self._save, width=float("inf"))
         )
 
         self.dialog = ft.AlertDialog(
+            bgcolor=ft.Colors.GREY_900,
+            shape=ft.RoundedRectangleBorder(radius=16),
+            content_padding=20,
             content=ft.Container(
-                content=ft.Column(content_controls, scroll=ft.ScrollMode.AUTO),
-                width=400,
-                height=600,
-                padding=10
+                content=ft.Column(content_controls, scroll=ft.ScrollMode.AUTO, spacing=10),
+                width=450,
+                height=650
             ),
-            actions=[ft.TextButton("Cancelar", on_click=self._close)]
+            actions=[ft.TextButton("Cancelar", on_click=self._close, style=ft.ButtonStyle(color=ft.Colors.GREY_400))]
         )
         
         self.page.overlay.append(self.dialog)
@@ -119,7 +132,7 @@ class PlaceForm:
 
     def _save(self, e):
         if not self.name_field.value:
-            self.name_field.error_text = "Nome obrigatório"
+            self.name_field.error_text = "Obrigatório"
             self.name_field.update()
             return
 

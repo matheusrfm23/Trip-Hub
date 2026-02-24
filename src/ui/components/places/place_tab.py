@@ -1,5 +1,12 @@
+# ARQUIVO: src/ui/components/places/place_tab.py
+# CHANGE LOG:
+# - Adicionada injeção de espaço vazio (height=90) no final da listagem para evitar que o botão flutuante (FAB) cubra os controles do último card.
+# - Proteção de diretório: Garante que a pasta 'assets/images' exista ao iniciar a aba para previnir o 'Errno 2'.
+
 import flet as ft
 import traceback
+import os
+from src.core.config import UPLOAD_ABS_PATH
 from src.logic.place_service import PlaceService
 from src.ui.components.places.cards.modern_hotel_card import ModernHotelCard 
 from src.ui.components.places.cards.compact_card import CompactCard
@@ -14,6 +21,10 @@ class PlaceTab(ft.Column):
         self.category = category
         self.places = []
         
+        # [PROTEÇÃO INFRA] Garante que a pasta images exista antes de qualquer tentativa de mover arquivos
+        images_dir = os.path.join(os.path.dirname(UPLOAD_ABS_PATH), "images")
+        os.makedirs(images_dir, exist_ok=True)
+        
         user = getattr(page, 'user_profile', {})
         self.current_user_id = user.get("name", "User1")
         self.is_admin = user.get("role") == "ADMIN"
@@ -24,20 +35,8 @@ class PlaceTab(ft.Column):
         self.content_view = ft.ListView(expand=True, spacing=20, padding=10) if self.is_hotel else \
                             ft.GridView(expand=True, runs_count=2, child_aspect_ratio=0.8, spacing=15, run_spacing=15, padding=15)
         
-        # [PROTECÃO] Inicia VISÍVEL. Se iniciar invisível e tentar dar update cedo demais, quebra.
         self.loading = ft.ProgressBar(width=100, color=ft.Colors.CYAN, visible=True)
-        
         self.place_form = PlaceForm(self.main_page, on_save_callback=self._on_form_save)
-        
-        if self.is_admin:
-            # Tenta definir o FAB, mas ignora erro se a página ainda não estiver pronta
-            try:
-                self.main_page.floating_action_button = ft.FloatingActionButton(
-                    icon=ft.Icons.ADD, bgcolor=ft.Colors.CYAN, 
-                    on_click=lambda _: self.place_form.open(self.category, item=None)
-                )
-                self.main_page.update()
-            except: pass
 
         self.controls = [
             ft.Container(self.loading, alignment=ft.Alignment(0,0), height=5),
@@ -45,7 +44,6 @@ class PlaceTab(ft.Column):
         ]
 
     def did_mount(self):
-        # [CRÍTICO] Não chame self.update() aqui. Apenas inicie a busca de dados.
         self.main_page.run_task(self._fetch_data)
 
     def load_data(self):
@@ -53,6 +51,14 @@ class PlaceTab(ft.Column):
         try: self.update()
         except: pass
         self.main_page.run_task(self._fetch_data)
+
+    def open_add_dialog(self, e=None):
+        if self.is_admin:
+            self.place_form.open(self.category, item=None)
+        else:
+            self.main_page.snack_bar = ft.SnackBar(ft.Text("Acesso Negado: Apenas administradores.", color=ft.Colors.WHITE), bgcolor=ft.Colors.RED_900)
+            self.main_page.snack_bar.open = True
+            self.main_page.update()
 
     async def _fetch_data(self):
         try:
@@ -66,19 +72,13 @@ class PlaceTab(ft.Column):
                     images = self.modal_manager._get_images(item["id"])
                     
                     if self.is_hotel:
-                        # [CORREÇÃO] Ajuste nas chamadas de callback para usar run_task e nomes corretos
                         callbacks = {
                             "on_edit": lambda i: self._open_edit_logic(i),
                             "on_delete": lambda i: self._delete_direct(i),
                             "on_add_photo": lambda pid: self.modal_manager.open_photo_manager(pid),
                             "on_delete_photo": self.modal_manager.delete_photo,
-                            
-                            # CORRIGIDO: Usa safe_launch_url (o nome correto) via run_task
                             "on_open_map": lambda link: self.main_page.run_task(self.modal_manager.safe_launch_url, link),
-                            
-                            # CORRIGIDO: Usa smart_copy via run_task (removemos o inexistente _run_async)
                             "on_copy": lambda txt: self.main_page.run_task(self.modal_manager.smart_copy, txt),
-                            
                             "on_zoom": self.modal_manager.open_zoom
                         }
                         items_controls.append(ModernHotelCard(item, self.is_admin, images, callbacks))
@@ -90,12 +90,15 @@ class PlaceTab(ft.Column):
                             on_click_callback=lambda i: self.modal_manager.show_details(i, self._open_edit_logic, self._delete_direct),
                             on_vote_callback=self._handle_vote_click
                         ))
+            
+            # [CORREÇÃO UX] Espaço extra no final para o conteúdo deslizar acima do Botão Flutuante
+            items_controls.append(ft.Container(height=90))
+            
             self.content_view.controls = items_controls
         except Exception as e:
             traceback.print_exc()
         finally:
             self.loading.visible = False
-            # Update seguro
             try: self.update()
             except: pass
 
@@ -105,20 +108,25 @@ class PlaceTab(ft.Column):
         self.place_form.open(self.category, item=item)
 
     async def _on_form_save(self, item_id, data_dict):
-        self.loading.visible = True; self.update()
+        self.loading.visible = True
+        self.update()
         data_dict.update({"country": self.country_code, "category": self.category})
         if item_id: await PlaceService.update_place(item_id, data_dict)
         else: await PlaceService.add_place(data_dict)
         self.load_data()
 
-    def _delete_direct(self, item): self.main_page.run_task(self._delete_async, item)
+    def _delete_direct(self, item): 
+        self.main_page.run_task(self._delete_async, item)
+
     async def _delete_async(self, item):
         await PlaceService.delete_place(item["id"], self.country_code, self.category)
         if self.modal_manager.current_modal: self.modal_manager.close_modal(self.modal_manager.current_modal)
         self.load_data()
 
     def _handle_vote_click(self, e, item):
-        e.control.icon = ft.Icons.FAVORITE; e.control.icon_color = ft.Colors.RED; e.control.update() 
+        e.control.icon = ft.Icons.FAVORITE
+        e.control.icon_color = ft.Colors.RED
+        e.control.update() 
         self.main_page.run_task(self._toggle_vote_async, item)
 
     async def _toggle_vote_async(self, item):

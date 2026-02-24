@@ -1,7 +1,11 @@
+# ARQUIVO: src/core/router.py
+# CHANGE LOG:
+# - Adição de log formal de erro no método _try_restore_session.
+# - Proteção melhorada na limpeza das páginas no on_view_pop.
+
 import flet as ft
 import logging
 import traceback
-import asyncio
 
 from src.logic.auth_service import AuthService
 from src.ui.views.login_view import LoginView
@@ -11,7 +15,6 @@ from src.ui.views.country_view import CountryView
 logger = logging.getLogger("TripHub.Router")
 
 class Router:
-    # Adicionei /logout para garantir a saída limpa
     PUBLIC_ROUTES = ["/login", "/error", "/logout"]
 
     def __init__(self, page: ft.Page):
@@ -27,7 +30,6 @@ class Router:
         if len(self.page.views) > 1:
             self.page.views.pop()
             top_view = self.page.views[-1]
-            # [CORREÇÃO] Atualiza a rota sem recriar histórico duplicado
             self.page.go(top_view.route) 
 
     async def route_change(self, route):
@@ -37,10 +39,9 @@ class Router:
         self.page.views.clear()
         
         try:
-            # === ROTA DE LOGOUT (Correção do loop de sair) ===
+            # === ROTA DE LOGOUT ===
             if route == "/logout":
                 self._perform_logout()
-                # Monta login direto sem redirecionar (evita loop)
                 self.page.views.append(LoginView(self.page))
                 self.page.update()
                 return
@@ -54,9 +55,6 @@ class Router:
                     
                     if not session_restored:
                         logger.warning(f"Acesso negado à rota '{route}'.")
-                        
-                        # === [CORREÇÃO CRÍTICA DO CRASH] ===
-                        # Monta a view de login imediatamente.
                         self.page.views.append(LoginView(self.page))
                         self.page.update()
                         return
@@ -66,8 +64,7 @@ class Router:
             
             if route == "/login":
                 if hasattr(self.page, "user_profile") and self.page.user_profile:
-                     # [CORREÇÃO] Uso da nova API push_route para evitar warnings
-                     self.page.push_route("/dashboard") 
+                     await self.page.push_route("/dashboard")
                      return
                 self.page.views.append(LoginView(self.page))
             
@@ -75,6 +72,9 @@ class Router:
                 self.page.views.append(DashboardView(self.page))
             
             elif troute.match("/country/:code"):
+                dashboard_exists = any(isinstance(v, DashboardView) for v in self.page.views)
+                if not dashboard_exists:
+                    self.page.views.append(DashboardView(self.page))
                 self.page.views.append(CountryView(self.page, troute.code))
             
             elif route == "/error":
@@ -83,9 +83,9 @@ class Router:
             else:
                 # Rota 404 - Redirecionamento Inteligente
                 if hasattr(self.page, "user_profile") and self.page.user_profile:
-                    self.page.push_route("/dashboard")
+                    await self.page.push_route("/dashboard")
                 else:
-                    self.page.push_route("/login")
+                    await self.page.push_route("/login")
 
         except Exception as e:
             error_msg = traceback.format_exc()
@@ -96,7 +96,6 @@ class Router:
 
     async def _try_restore_session(self):
         try:
-            # Verifica se o storage está disponível antes de tentar ler
             if not hasattr(self.page, "client_storage") or self.page.client_storage is None:
                 return False
 
@@ -111,7 +110,9 @@ class Router:
             else:
                 self.page.client_storage.remove("user_id")
                 return False
-        except Exception:
+        except Exception as e:
+            # Não engole mais o erro silenciosamente
+            logger.error(f"Falha ao tentar restaurar sessão do client_storage: {e}", exc_info=True)
             return False
 
     def _perform_logout(self):
@@ -132,8 +133,7 @@ class Router:
                         ft.Icon(ft.Icons.ERROR_OUTLINE, size=60, color=ft.Colors.WHITE),
                         ft.Text("Erro Crítico", size=24, weight="bold"),
                         ft.Text(str(msg), color=ft.Colors.WHITE30),
-                        # [CORREÇÃO] Atualizado para push_route
-                        ft.ElevatedButton("Reiniciar", on_click=lambda _: self.page.push_route("/login"))
+                        ft.ElevatedButton("Reiniciar", on_click=lambda _: self.page.run_task(self.page.push_route, "/login"))
                     ], alignment="center", horizontal_alignment="center")
                 ]
             )

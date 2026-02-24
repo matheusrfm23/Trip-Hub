@@ -1,19 +1,15 @@
 import json
-import os
 import time
 import asyncio
 import aiohttp
 from datetime import datetime, timedelta
-from src.core.config import ASSETS_DIR
-from src.core.locker import file_lock
+from src.data.database import Database
 from src.core.logger import get_logger
+from src.core.profiler import track_execution
 
 log = get_logger("BannerService")
 
 class BannerService:
-    CONFIG_FILE = os.path.join(ASSETS_DIR, "data", "banner_config.json")
-    SCHEDULE_FILE = os.path.join(ASSETS_DIR, "data", "schedule.json")
-    
     # SUA CHAVE EXATA (Sem decodificar)
     ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImEwNjFjNmNhZmJiNTQ5OTI5Y2UwNmU2MzdjOTY2MGFjIiwiaCI6Im11cm11cjY0In0="
 
@@ -31,7 +27,8 @@ class BannerService:
     }
 
     @classmethod
-    def get_config(cls):
+    @track_execution(threshold=0.5)
+    async def get_config(cls):
         default = {
             "mode": "auto", "theme": "Ocean", "dynamic_theme": True,
             "manual_text": "TripHub System", "manual_advice": "",
@@ -41,31 +38,86 @@ class BannerService:
             "show_timeline": True, "show_weather": True, "show_currency": True, "show_advice": True,
             "alert_enabled": False, "alert_target": 5.20
         }
-        if not os.path.exists(cls.CONFIG_FILE): return default
+
+        conn = Database.get_connection()
         try:
-            with open(cls.CONFIG_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-                for k, v in default.items():
-                    if k not in saved: saved[k] = v
-                return saved
-        except: return default
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM banner_config WHERE id = 1")
+            row = cursor.fetchone()
+
+            if row:
+                config = dict(row)
+                # Parse JSON fields and Booleans
+                if config.get("target_location"):
+                    try: config["target_location"] = json.loads(config["target_location"])
+                    except: config["target_location"] = default["target_location"]
+
+                # Convert SQLite Integer Booleans to Python Bools
+                bool_cols = ["dynamic_theme", "show_timeline", "show_weather", "show_currency", "show_advice", "alert_enabled"]
+                for col in bool_cols:
+                    if col in config:
+                        config[col] = bool(config[col])
+
+                # Merge with default to ensure all keys exist
+                final_config = default.copy()
+                final_config.update(config)
+                return final_config
+            else:
+                return default
+        except Exception as e:
+            log.error(f"Erro ao ler banner_config: {e}")
+            return default
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def save_config(cls, new_config):
-        current = cls.get_config()
+        # Primeiro, obtemos a config completa atual para fazer merge
+        current = await cls.get_config()
         current.update(new_config)
+
+        conn = Database.get_connection()
         try:
-            with file_lock():
-                with open(cls.CONFIG_FILE, "w", encoding="utf-8") as f:
-                    json.dump(current, f, indent=4)
-            cls._mem_cache["weather"]["ts"] = 0 
+            loc_json = json.dumps(current.get("target_location", {}), ensure_ascii=False)
+
+            # Prepare values for REPLACE (UPSERT)
+            # Or UPDATE since we know ID=1 exists (or we create it)
+            # Using INSERT OR REPLACE is safer if row doesn't exist
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO banner_config (
+                    id, mode, theme, dynamic_theme, manual_text, manual_advice,
+                    start_date, target_date, target_location,
+                    show_timeline, show_weather, show_currency, show_advice,
+                    alert_enabled, alert_target
+                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                current.get("mode"), current.get("theme"), 1 if current.get("dynamic_theme") else 0,
+                current.get("manual_text"), current.get("manual_advice"),
+                current.get("start_date"), current.get("target_date"), loc_json,
+                1 if current.get("show_timeline") else 0,
+                1 if current.get("show_weather") else 0,
+                1 if current.get("show_currency") else 0,
+                1 if current.get("show_advice") else 0,
+                1 if current.get("alert_enabled") else 0,
+                current.get("alert_target")
+            ))
+            conn.commit()
+
+            cls._mem_cache["weather"]["ts"] = 0 # Invalida cache de clima
+            return True
         except Exception as e:
             log.error(f"Erro ao salvar config: {e}")
+            return False
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=1.0)
     async def get_oracle_data(cls, user_id=None):
         try:
-            config = cls.get_config()
+            config = await cls.get_config()
             now = datetime.now()
 
             tasks = []
@@ -79,6 +131,8 @@ class BannerService:
 
             try:
                 results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=3.0)
+                # Results map: 0->Finance, 1->Weather, 2->Schedule (if all ran)
+                # But since tasks are conditional, we need to pick the last result which is schedule
                 active_event = results[-1] if (results and not isinstance(results[-1], Exception)) else None
             except asyncio.TimeoutError:
                 active_event = None
@@ -110,9 +164,11 @@ class BannerService:
                 "advice": advice, "alert_active": alert_active
             }
         except Exception as e:
-            print(f"CRITICAL BANNER ERROR: {e}")
+            log.critical(f"CRITICAL BANNER ERROR: {e}")
+            # Fallback seguro
+            default_config = await cls.get_config()
             return {
-                "state": "PLANNING", "config": cls.get_config(),
+                "state": "PLANNING", "config": default_config,
                 "weather": cls._mem_cache["weather"]["data"],
                 "finance": cls._mem_cache["finance"]["data"],
                 "flight": {"is_flight": False},
@@ -139,15 +195,13 @@ class BannerService:
                             props = features[0].get("properties", {})
                             geom = features[0].get("geometry", {}).get("coordinates", [])
                             if len(geom) >= 2:
-                                print(f"📍 Local encontrado via ORS: {props.get('label')}")
+                                log.info(f"Local encontrado via ORS: {props.get('label')}")
                                 return {"name": props.get("name", query), "label": props.get("label", query), "lon": geom[0], "lat": geom[1]}
-                    else:
-                        print(f"⚠️ Erro ORS ({resp.status}): Tentando Fallback...")
         except Exception as e:
-            print(f"⚠️ Exceção ORS: {e}")
+            log.warning(f"Exceção ORS: {e}")
 
         # 2. PLANO B: OPEN-METEO GEOCODING (Sem Key)
-        print("🔄 Tentando OpenMeteo Geocoding...")
+        log.info("Tentando OpenMeteo Geocoding...")
         url_om = "https://geocoding-api.open-meteo.com/v1/search"
         params_om = {"name": query, "count": 1, "language": "pt", "format": "json"}
         
@@ -160,24 +214,18 @@ class BannerService:
                         if results:
                             item = results[0]
                             full_name = f"{item.get('name')}, {item.get('country_code')}"
-                            print(f"📍 Local encontrado via OpenMeteo: {full_name}")
+                            log.info(f"Local encontrado via OpenMeteo: {full_name}")
                             return {"name": item.get("name"), "label": full_name, "lat": item.get("latitude"), "lon": item.get("longitude")}
         except Exception as e:
-            print(f"❌ Erro OpenMeteo: {e}")
+            log.error(f"Erro OpenMeteo: {e}")
             
         return None
 
     @classmethod
     async def get_location_name(cls, lat, lon):
         """Tenta descobrir o nome da cidade pelas coordenadas"""
-        # Fallback direto para OpenMeteo Reverso (Mais simples)
-        url = "https://geocoding-api.open-meteo.com/v1/reverse"
-        # ?latitude=52.52&longitude=13.41&language=pt&format=json
         try:
             async with aiohttp.ClientSession() as session:
-                # Url precisa ser montada ou usar params corretos da lib nova do openmeteo, 
-                # mas o endpoint direto é esse. Note que nem sempre está habilitado no plano free básico sem lat/lon exatos.
-                # Vamos tentar Nominatim (OpenStreetMap) que é o padrão da comunidade
                 url_osm = "https://nominatim.openstreetmap.org/reverse"
                 params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10}
                 headers = {"User-Agent": "TripHub/1.0"}
@@ -272,15 +320,26 @@ class BannerService:
 
     @classmethod
     async def _check_schedule(cls):
-        if not os.path.exists(cls.SCHEDULE_FILE): return None
+        # Leitura da tabela Schedule
+        conn = Database.get_connection()
         try:
-            with open(cls.SCHEDULE_FILE, 'r') as f: schedule = json.load(f)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM schedule")
+            rows = cursor.fetchall()
+
             now = datetime.now()
-            for event in schedule:
-                start = datetime.strptime(event["start"], "%Y-%m-%d %H:%M")
-                end = datetime.strptime(event["end"], "%Y-%m-%d %H:%M")
-                if start <= now <= end: return event
-        except: pass
+            for row in rows:
+                event = dict(row)
+                try:
+                    start = datetime.strptime(event["start"], "%Y-%m-%d %H:%M")
+                    end = datetime.strptime(event["end"], "%Y-%m-%d %H:%M")
+                    if start <= now <= end:
+                        return event
+                except: pass
+        except Exception as e:
+            log.error(f"Erro ao verificar schedule: {e}")
+        finally:
+            conn.close()
         return None
 
     @staticmethod

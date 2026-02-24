@@ -1,7 +1,14 @@
 # ARQUIVO: src/ui/components/upload_manager.py
+# CHANGE LOG:
+# - Correção no tratamento do nome do arquivo pós-upload. Renomeia o arquivo limpo (sem acentos) 
+#   de volta para o nome original na pasta "uploads" de forma invisível, garantindo que o 
+#   PlaceModalManager consiga encontrar o arquivo exatamente pelo nome que ele espera.
+# - A limpeza da lista 'picked_files' foi movida para depois de invocar o callback (on_complete).
+
 import flet as ft
 import re
 import unicodedata
+import os
 from src.core.config import UPLOAD_ABS_PATH
 
 class UploadManager:
@@ -10,11 +17,9 @@ class UploadManager:
         self.on_complete = on_upload_complete_callback
         self.log = log_callback
         self.picked_files = []
+        self.sanitized_map = {}
         
-        # UI Elements
         self.progress_bar = ft.ProgressBar(width=None, color="amber", bgcolor="#222222", value=0, visible=False)
-        
-        # Inicializa o FilePicker
         self.file_picker = ft.FilePicker(on_upload=self._on_upload_progress)
 
         self.btn_pick = ft.FilledButton("Selecionar Fotos", icon=ft.Icons.PHOTO_LIBRARY, on_click=self._pick_click)
@@ -28,41 +33,44 @@ class UploadManager:
         ])
 
     def _sanitize_filename(self, filename):
-        """
-        Remove acentos, espaços e caracteres especiais para evitar erro 
-        'Response content longer than Content-Length' no servidor.
-        Ex: 'Foto da Praia!.jpg' -> 'foto_da_praia.jpg'
-        """
-        # 1. Normaliza unicode (separa acentos das letras)
         nfkd_form = unicodedata.normalize('NFKD', filename)
-        # 2. Mantém apenas caracteres ASCII (remove acentos)
         filename = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-        # 3. Converte para minúsculas
-        filename = filename.lower()
-        # 4. Substitui espaços por underscores
-        filename = filename.replace(" ", "_")
-        # 5. Remove tudo que não for letra, número, underline, traço ou ponto
+        filename = filename.lower().replace(" ", "_")
         filename = re.sub(r'[^a-z0-9_.-]', '', filename)
         return filename
 
     def _on_upload_progress(self, e):
-        # Proteção contra valores nulos durante falhas de rede
         if e.progress is None: return
 
         self.progress_bar.value = e.progress
         if e.progress >= 1.0:
             self.progress_bar.visible = False
-            self.picked_files = [] 
             self.btn_upload.disabled = True
             self.btn_upload.text = "Enviar"
             
-            # Feedback visual de sucesso
+            # [WORKAROUND BACKEND] Restauramos os nomes originais físicos para o ModalManager encontrar
+            for original_name, clean_name in self.sanitized_map.items():
+                if original_name != clean_name:
+                    clean_path = os.path.join(UPLOAD_ABS_PATH, clean_name)
+                    original_path = os.path.join(UPLOAD_ABS_PATH, original_name)
+                    if os.path.exists(clean_path):
+                        if os.path.exists(original_path):
+                            try: os.remove(original_path)
+                            except: pass
+                        try: os.rename(clean_path, original_path)
+                        except: pass
+            
             self.page.snack_bar = ft.SnackBar(ft.Text("Upload concluído com sucesso!"), bgcolor="green")
             self.page.snack_bar.open = True
             self.page.update()
             
+            # [CORREÇÃO DE CALLBACK] Dispara o evento ANTES de limpar a lista
             if self.on_complete:
                 self.on_complete() 
+                
+            self.picked_files = [] 
+            self.sanitized_map = {}
+            
         self.page.update()
 
     async def _pick_click(self, e):
@@ -70,7 +78,6 @@ class UploadManager:
             if self.file_picker not in self.page.controls and self.file_picker.page is None:
                  return
 
-            # OTIMIZAÇÃO: file_type=IMAGE força galeria no mobile
             files = await self.file_picker.pick_files(
                 allow_multiple=True,
                 file_type=ft.FilePickerFileType.IMAGE
@@ -83,12 +90,10 @@ class UploadManager:
                 self.page.snack_bar = ft.SnackBar(ft.Text(f"{len(files)} fotos selecionadas"), bgcolor="blue")
                 self.page.snack_bar.open = True
                 self.page.update()
-            else:
-                pass # Usuário cancelou
                 
         except Exception as ex:
             print(f"Erro ao selecionar: {ex}")
-            self.page.snack_bar = ft.SnackBar(ft.Text("Erro de conexão. Tente selecionar mais rápido."), bgcolor="red")
+            self.page.snack_bar = ft.SnackBar(ft.Text("Erro de conexão. Tente novamente."), bgcolor="red")
             self.page.snack_bar.open = True
             self.page.update()
 
@@ -101,17 +106,17 @@ class UploadManager:
         
         try:
             uploads = []
+            self.sanitized_map = {}
             for f in self.picked_files:
-                # APLICA A SANITIZAÇÃO AQUI
                 clean_name = self._sanitize_filename(f.name)
+                self.sanitized_map[f.name] = clean_name
                 
-                # Gera URL com o nome limpo
                 upload_url = self.page.get_upload_url(clean_name, 600)
                 
                 uploads.append(
                     ft.FilePickerUploadFile(
-                        name=f.name, # Nome original para o picker saber qual arquivo pegar do disco local
-                        upload_url=upload_url, # URL de destino (já contém o nome limpo)
+                        name=f.name,
+                        upload_url=upload_url,
                         method="PUT"
                     )
                 )

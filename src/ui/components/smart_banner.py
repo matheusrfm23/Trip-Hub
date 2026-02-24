@@ -57,6 +57,7 @@ class SmartBanner(ft.Container):
     async def _main_loop(self):
         while self.running:
             try:
+                # [ATUALIZADO] await na chamada do serviço
                 data = await BannerService.get_oracle_data(self.user.get("id"))
                 self.config = data.get("config", {})
                 self.full_data = data
@@ -288,6 +289,7 @@ class SmartBanner(ft.Container):
 
         content = ft.Column([ft.Text("Conversor Fronteira", size=12, color="white54", weight="bold"), ft.Container(height=10), txt_brl, ft.Divider(height=20, color="white10"), ft.Row([ft.Text("Dólar", width=60, color="white70"), lbl_usd], alignment="spaceBetween"), ft.Row([ft.Text("Peso Blue", width=70, color="white70"), lbl_blue], alignment="spaceBetween"), ft.Row([ft.Text("Guarani", width=60, color="white70"), lbl_pyg], alignment="spaceBetween"), ft.Container(height=10), ft.Text(f"Base: Blue {blue:.0f} | PYG {pyg:.0f}", size=9, color="white30", text_align="center")], tight=True)
         self.weather_dialog = ft.AlertDialog(content=ft.Container(content=content, width=260, height=340, padding=15), bgcolor=ft.Colors.GREY_900)
+        # [ATUALIZADO] Usa page.overlay.append
         self.page_ref.overlay.append(self.weather_dialog)
         self.weather_dialog.open = True
         self.page_ref.update()
@@ -304,6 +306,7 @@ class SmartBanner(ft.Container):
             except: pass
         content = ft.Column([ft.Row([ft.Icon(ft.Icons.LOCATION_ON, size=12, color="white54"), ft.Text(self.config.get("target_location", {}).get("name"), size=12, color="white54")], alignment="center"), ft.Container(height=10), ft.Row([ft.Icon(self._get_weather_icon(w.get("code", 0), w.get("is_day", 1)), size=60, color="white"), ft.Column([ft.Text(f"{w.get('temp', '--')}°", size=48, weight="bold", height=48), ft.Text(w.get("desc", ""), size=14, color="white70")], spacing=0)], alignment="center"), ft.Container(height=20), ft.Row([stat_row(ft.Icons.THERMOSTAT, "Sensação", f"{w.get('feels_like', '--')}°", ft.Colors.ORANGE), stat_row(ft.Icons.WATER_DROP, "Umidade", f"{w.get('humidity', '--')}%", ft.Colors.BLUE)]), ft.Container(height=10), ft.Row([stat_row(ft.Icons.AIR, "Vento", f"{w.get('wind', '--')} km/h", ft.Colors.GREY)]), ft.Divider(color="white10", height=30), ft.Text("PRÓXIMOS DIAS", size=10, weight="bold", color="white30"), ft.Column(forecast_items, spacing=0)], tight=True)
         self.weather_dialog = ft.AlertDialog(content=ft.Container(content=content, width=300, height=450, padding=10), bgcolor=ft.Colors.GREY_900)
+        # [ATUALIZADO] Usa page.overlay.append
         self.page_ref.overlay.append(self.weather_dialog)
         self.weather_dialog.open = True
         self.page_ref.update()
@@ -340,6 +343,7 @@ class SmartBanner(ft.Container):
         async def do_search(e):
             if not self.tf_dest.value: return
             self.txt_gps_status.value = "Buscando..."; self.prog_gps.visible = True; self.page_ref.update()
+            # [ATUALIZADO] await na busca
             res = await BannerService.search_location_api(self.tf_dest.value)
             self.prog_gps.visible = False
             if res:
@@ -410,6 +414,7 @@ class SmartBanner(ft.Container):
         else: body = ft.Row([self.nav_desktop, ft.VerticalDivider(width=1), self.content_area], expand=True)
 
         self.admin_dialog = ft.AlertDialog(title=ft.Text("Configurações", size=18, weight="bold"), content=ft.Container(content=body, width=dialog_width, height=450), actions=[ft.TextButton("Cancelar", on_click=lambda e: setattr(self.admin_dialog, 'open', False) or self.page_ref.update()), ft.ElevatedButton("SALVAR", bgcolor=ft.Colors.CYAN_600, color="white", on_click=self._save_config)], actions_alignment="end", bgcolor=ft.Colors.GREY_900)
+        # [ATUALIZADO] Usa page.overlay.append
         self.page_ref.overlay.append(self.admin_dialog)
         self.admin_dialog.open = True
         self.page_ref.update()
@@ -431,6 +436,7 @@ class SmartBanner(ft.Container):
             self.page_ref.update()
 
     async def _fetch_gps_name(self, lat, lon):
+        # [ATUALIZADO] await na chamada
         name = await BannerService.get_location_name(lat, lon)
         if hasattr(self, 'tf_dest'):
             self.tf_dest.value = name
@@ -447,6 +453,7 @@ class SmartBanner(ft.Container):
                 "alert_enabled": self.sw_alert.value, "alert_target": float(self.tf_alert.value or 0),
                 "target_location": {"name": self.tf_dest.value, "lat": float(self.tf_lat.value), "lon": float(self.tf_lon.value)}
             }
+            # [ATUALIZADO] await na chamada
             await BannerService.save_config(new)
             self.admin_dialog.open = False
             self.force_refresh = True

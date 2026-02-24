@@ -1,7 +1,10 @@
 # ARQUIVO: src/core/locker.py
+# CHANGE LOG:
+# - Corrigida falha de segurança onde operações continuavam mesmo se o lock falhasse.
+# - Lançamento explícito de TimeoutError para impedir corrupção de dados por concorrência simultânea.
+
 import threading
 from contextlib import contextmanager
-import time
 
 # Lock global para operações de escrita em JSON
 # Isso garante que apenas uma thread do servidor escreva nos arquivos por vez
@@ -17,10 +20,12 @@ def file_lock(timeout=10):
     """
     # Tenta adquirir o cadeado. Se demorar mais que 'timeout', desiste para não travar o server.
     locked = _json_lock.acquire(timeout=timeout)
+    
+    if not locked:
+        print("⚠️ ERRO CRÍTICO: Timeout ao tentar adquirir Lock de arquivo. Operação abortada para evitar corrupção.")
+        raise TimeoutError("Não foi possível adquirir acesso exclusivo ao arquivo.")
+        
     try:
-        if not locked:
-            print("⚠️ AVISO CRÍTICO: Timeout ao tentar adquirir Lock de arquivo. Possível gargalo de I/O.")
         yield locked
     finally:
-        if locked:
-            _json_lock.release()
+        _json_lock.release()

@@ -140,6 +140,7 @@ class LoginView(ft.View):
 
     def _create_circular_profile(self, profile):
         initials = profile["name"][:2].upper()
+        # [SEGURANÇA] Botão de apagar removido. Exclusão apenas via ProfileSheet logado.
         return ft.Column(
             controls=[
                 ft.Container(
@@ -150,8 +151,9 @@ class LoginView(ft.View):
                     alignment=ft.Alignment(0, 0),
                     content=ft.Text(initials, size=30, weight="bold", color=ft.Colors.WHITE),
                     ink=True,
-                    data=profile, 
-                    on_click=self._on_profile_click
+                    data=profile,
+                    on_click=self._on_profile_click,
+                    tooltip=f"Entrar como {profile['name']}"
                 ),
                 ft.Text(profile["name"], size=16, weight="bold", color=ft.Colors.WHITE70, text_align="center")
             ],
@@ -171,7 +173,8 @@ class LoginView(ft.View):
                     alignment=ft.Alignment(0, 0),
                     content=ft.Icon(ft.Icons.ADD, size=40, color=ft.Colors.GREY),
                     ink=True,
-                    on_click=self._open_add_dialog
+                    on_click=self._open_add_dialog,
+                    tooltip="Criar novo perfil"
                 ),
                 ft.Text("Adicionar", size=16, color=ft.Colors.GREY, text_align="center")
             ],
@@ -185,6 +188,7 @@ class LoginView(ft.View):
         self.pin_field.value = ""
         self.pin_error.value = ""
         self.pin_field.disabled = False
+
         if self.pin_dialog not in self.main_page.overlay:
             self.main_page.overlay.append(self.pin_dialog)
         self.pin_dialog.open = True
@@ -197,7 +201,6 @@ class LoginView(ft.View):
         self.pin_field.disabled = True
         self.update()
 
-        # [MODIFICAÇÃO] Usa o AuthService para validar login e gerar logs
         user_id = self.selected_profile.get("id")
         pin = self.pin_field.value
         
@@ -205,36 +208,24 @@ class LoginView(ft.View):
 
         if user:
             self.pin_dialog.open = False
+            self.main_page.update()
+
             self.main_page.user_profile = user
             
-            # --- BLINDAGEM DE STORAGE & CACHE ---
             try:
-                # Salva sessão no navegador (Flet Client Storage)
                 if hasattr(self.main_page, "client_storage") and self.main_page.client_storage:
                     self.main_page.client_storage.set("user_id", str(user["id"]))
-                
-                # Salva cache local no servidor (Server Side) para recuperação rápida
-                AuthService.save_cached_login(user["id"])
             except Exception as ex:
                 logger.warning(f"Não foi possível salvar sessão: {ex}")
-            # ---------------------------
             
-            self._close_dialogs(None)
-            
-            # [CORREÇÃO CRÍTICA DE ROTA]
-            # Se a URL já for /dashboard (porque o Router bloqueou e mostrou login),
-            # o comando .go("/dashboard") não dispara evento de rota.
-            # Redirecionamos para "/" que o Router automaticamente jogará para o dashboard.
-            if self.main_page.route == "/dashboard":
-                logger.info("Rota presa em /dashboard detectada. Redirecionando via root.")
-                self.main_page.go("/")
-            else:
-                self.main_page.go("/dashboard")
+            # Limpa as views e navega
+            self.main_page.views.clear()
+            await self.main_page.push_route("/dashboard")
         else:
             self.pin_error.value = "Senha incorreta"
             self.pin_field.disabled = False
             self.pin_field.value = ""
-            self.pin_field.focus()
+            await self.pin_field.focus()
             self.update()
 
     async def _open_add_dialog(self, e):
@@ -257,14 +248,22 @@ class LoginView(ft.View):
         self.pin_error.value = ""
         self.selected_profile = None
         self.pin_field.disabled = False
-        self.main_page.overlay.clear()
+        # Limpeza do overlay ao fechar para evitar duplicatas futuras
+        # Nota: remover do overlay pode ser arriscado se feito errado, mas aqui estamos limpando TUDO?
+        # Não, melhor remover apenas os dialogs conhecidos se existirem
+        if self.pin_dialog in self.main_page.overlay:
+            self.main_page.overlay.remove(self.pin_dialog)
+        if self.add_dialog in self.main_page.overlay:
+            self.main_page.overlay.remove(self.add_dialog)
         self.main_page.update()
 
     async def _save_profile(self, e):
         if self.new_name.value and len(self.new_pin.value) == 4:
             self.add_dialog.open = False
             self.main_page.update()
+
             self.loader.visible = True
             self.update()
+
             await AuthService.create_profile(self.new_name.value, self.new_pin.value)
             await self._load_profiles()

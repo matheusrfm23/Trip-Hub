@@ -1,7 +1,19 @@
+# ARQUIVO: src/core/config.py
+# CHANGE LOG:
+# - Adicionada tentativa de importação do `dotenv` para ler o arquivo .env localmente.
+# - Garantia de que a FLET_SECRET_KEY não mude a cada reinício se definida no .env.
+
 import os
 import secrets
 import socket
 import flet as ft
+
+# Tenta carregar variáveis de ambiente do arquivo .env (se existir e a biblioteca estiver instalada)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # ==============================================================================
 # 1. CONFIGURAÇÕES GERAIS DO TRIP HUB
@@ -34,7 +46,7 @@ def get_lan_ip():
 # Define o IP real da máquina
 MEU_IP = get_lan_ip()
 
-# [CORREÇÃO] Porta unificada. Se mudar aqui, muda no servidor inteiro.
+# Porta unificada. Se mudar aqui, muda no servidor inteiro.
 PORTA = int(os.getenv("PORT", 8080)) 
 
 # ==============================================================================
@@ -50,7 +62,7 @@ DATA_DIR = os.path.join(ASSETS_DIR, "data")
 UPLOAD_REL_PATH = "uploads"
 UPLOAD_ABS_PATH = os.path.join(ASSETS_DIR, UPLOAD_REL_PATH)
 
-# Segurança
+# Segurança: Se a chave não existir no ambiente/arquivo .env, cria uma segura temporária
 if "FLET_SECRET_KEY" not in os.environ:
     os.environ["FLET_SECRET_KEY"] = secrets.token_urlsafe(16)
 
