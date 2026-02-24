@@ -48,7 +48,7 @@ class CountryView(ft.View):
                         icon_color=ft.Colors.WHITE,
                         on_click=lambda _: self.main_page.run_task(self._go_home)
                     ),
-                    ft.Text(self.cfg["name"].upper(), size=20, weight="bold", letter_spacing=2),
+                    ft.Text(self.cfg["name"].upper(), size=20, weight="bold"),
                 ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
 
                 ft.Container(

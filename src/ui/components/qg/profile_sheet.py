@@ -27,11 +27,10 @@ class QGProfileSheetManager:
             content=ft.Text("Tem certeza? Esta ação apagará permanentemente o seu Perfil, Voos e Finanças e não tem volta."),
             actions=[
                 ft.TextButton("Cancelar", on_click=self._close_delete_dialog),
-                ft.ElevatedButton(
+                ft.TextButton(
                     "SIM, APAGAR TUDO",
-                    bgcolor=ft.Colors.RED,
-                    color=ft.Colors.WHITE,
-                    on_click=self._execute_delete
+                    style=ft.ButtonStyle(color=ft.Colors.ERROR),
+                    on_click=lambda e: self.page.run_task(self._execute_delete, e)
                 )
             ],
             actions_alignment=ft.MainAxisAlignment.END
