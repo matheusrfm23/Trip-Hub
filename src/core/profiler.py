@@ -1,3 +1,7 @@
+# ARQUIVO: src/core/profiler.py
+# CHANGE LOG:
+# - Código original restaurado mantendo a lógica dinâmica de níveis de monitoramento (FULL, BASIC, ERROR_ONLY).
+
 import time
 import functools
 import asyncio

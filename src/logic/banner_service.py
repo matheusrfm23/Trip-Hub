@@ -1,3 +1,8 @@
+# ARQUIVO: src/logic/banner_service.py
+# CHANGE LOG:
+# - Restauração completa de todo o código original do usuário (ORS, OpenMeteo, Finance, Check Schedule).
+# - Adicionado sistema de Throttling (Freio de Event Loop) no `get_oracle_data` para impedir que loops de UI causem 100% de uso de CPU e congelem a aplicação.
+
 import json
 import time
 import asyncio
@@ -25,6 +30,9 @@ class BannerService:
             }
         }
     }
+
+    # Controle de chamadas abusivas da UI (Evita o congelamento do WebSocket)
+    _call_throttle = {}
 
     @classmethod
     @track_execution(threshold=0.5)
@@ -116,6 +124,19 @@ class BannerService:
     @classmethod
     @track_execution(threshold=1.0)
     async def get_oracle_data(cls, user_id=None):
+        # --- BLINDAGEM ANTI-CONGELAMENTO DE CPU ---
+        # Se a UI tentar chamar esta função freneticamente, ela impõe um limite
+        # de no máximo 5 requisições por segundo, forçando o Event Loop a respirar.
+        uid = str(user_id) if user_id else "global"
+        now_ts = time.time()
+        time_since_last = now_ts - cls._call_throttle.get(uid, 0)
+        
+        if time_since_last < 0.2:
+            await asyncio.sleep(0.2 - time_since_last)
+            
+        cls._call_throttle[uid] = time.time()
+        # ------------------------------------------
+
         try:
             config = await cls.get_config()
             now = datetime.now()
