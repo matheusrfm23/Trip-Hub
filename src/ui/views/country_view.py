@@ -37,8 +37,8 @@ class CountryView(ft.View):
         self.header = ft.Container(
             padding=ft.padding.only(left=5, right=10, top=10, bottom=15),
             gradient=ft.LinearGradient(
-                begin=ft.Alignment.top_center,
-                end=ft.Alignment.bottom_center,
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
                 colors=[self.cfg["color"], ft.Colors.BLACK]
             ),
             content=ft.Column([
@@ -79,7 +79,7 @@ class CountryView(ft.View):
         self.content_area = ft.Container(
             expand=True,
             bgcolor=ft.Colors.BLACK,
-            alignment=ft.Alignment.top_center
+            alignment=ft.alignment.top_center
         )
         
         # Carrega o conteúdo inicial
@@ -181,7 +181,7 @@ class CountryView(ft.View):
         except Exception as e:
             print(f"Erro ao carregar factory: {e}")
             self.content_area.content = ft.Container(
-                alignment=ft.Alignment(0,0),
+                alignment=ft.alignment.center,
                 content=ft.Column([
                     ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED, size=50),
                     ft.Text(f"Erro ao carregar módulo.\n{e}", color=ft.Colors.RED, text_align="center")

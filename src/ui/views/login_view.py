@@ -225,7 +225,7 @@ class LoginView(ft.View):
             self.pin_error.value = "Senha incorreta"
             self.pin_field.disabled = False
             self.pin_field.value = ""
-            self.pin_field.focus()
+            await self.pin_field.focus()
             self.update()
 
     async def _open_add_dialog(self, e):

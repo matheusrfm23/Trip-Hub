@@ -6,3 +6,5 @@
 2026-02-24 03:29:15 | ERROR    | PlaceService    | Erro ao buscar locais (br/hotel): no such table: places
 2026-02-24 03:29:36 | INFO     | PlaceService    | Local adicionado: Hotel Extra (7fe5746c-4487-44ac-b5bd-07ec4ccb95a0)
 2026-02-24 03:29:36 | INFO     | PlaceService    | Local atualizado: 7fe5746c-4487-44ac-b5bd-07ec4ccb95a0
+2026-02-24 03:41:32 | INFO     | PlaceService    | Local adicionado: Hotel Extra (34e030b5-f11b-4001-b96a-e3cd5f014639)
+2026-02-24 03:41:32 | INFO     | PlaceService    | Local atualizado: 34e030b5-f11b-4001-b96a-e3cd5f014639
