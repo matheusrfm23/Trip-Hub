@@ -1,3 +1,8 @@
+# ARQUIVO: src/main.py
+# CHANGE LOG:
+# - Atualizada a função de inicialização ft.app() para ft.run() para remover 
+#   o DeprecationWarning nas novas versões do Flet, resolvendo conflitos do uvicorn.
+
 import logging
 import os
 import flet as ft
@@ -74,7 +79,11 @@ if __name__ == "__main__":
         
     print("="*60 + "\n")
     
-    ft.app(
+    # Substituição correta do ft.app pelo ft.run para Flet 0.81.0+
+    # Evita que o FastAPI/Uvicorn se confunda e feche conexões antecipadamente
+    run_func = getattr(ft, "run", getattr(ft, "app"))
+    
+    run_func(
         target=main, 
         assets_dir=ASSETS_DIR,
         upload_dir=UPLOAD_ABS_PATH,

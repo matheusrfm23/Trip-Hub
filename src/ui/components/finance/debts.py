@@ -1,3 +1,8 @@
+# ARQUIVO: src/ui/components/finance/debts.py
+# CHANGE LOG:
+# - A verificação foi mudada para getattr(self.CONTROLE_ESPECIFICO, "page", None).
+# - O Flet atualizado perde a referência do page no componente pai mais rápido que no componente filho na limpeza de view.
+
 import flet as ft
 from src.logic.finance_service import FinanceService
 
@@ -40,15 +45,15 @@ class DebtManager:
                     c['name'] = self._get_profile_name(c.get("id"))
                     self.debt_carousel.controls.append(self._build_contact_card(c))
 
-            # [CORREÇÃO] Verificação segura de página
-            if getattr(self.container, "page", None):
+            # [CORREÇÃO] A propriedade page precisa ser avaliada no controle exato que sofrerá .update()
+            if getattr(self.debt_carousel, "page", None):
                 self.debt_carousel.update()
                 if self.selected_contact_id: await self._refresh_history()
         except Exception as e: print(f"Erro render debts: {e}")
 
     async def _refresh_history(self):
-        # [CORREÇÃO] Verifica se ainda está na página antes de processar
-        if not getattr(self.container, "page", None): return
+        # [CORREÇÃO] Verifica antes de processar query pesada
+        if not getattr(self.debt_detail_list, "page", None): return
         c_name = self._get_profile_name(self.selected_contact_id)
         await self._load_history(self.selected_contact_id, c_name)
 
@@ -73,7 +78,7 @@ class DebtManager:
     async def _select_contact(self, contact_id, contact_name):
         self.selected_contact_id = contact_id
         await self.render_carousel() 
-        if getattr(self.container, "page", None): await self._load_history(contact_id, contact_name)
+        if getattr(self.debt_detail_list, "page", None): await self._load_history(contact_id, contact_name)
 
     async def _load_history(self, contact_id, contact_name):
         self.debt_detail_title.value = f"Extrato com {contact_name}"

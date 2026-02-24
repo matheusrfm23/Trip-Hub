@@ -1,8 +1,13 @@
 # ARQUIVO: src/logic/finance_service.py
+# CHANGE LOG:
+# - Implementado `time.time()` para Cache (TTL de 600s/10 min).
+# - O app agora não vai mais travar aguardando APIs repetidas a cada troca de aba.
+
 import json
 import asyncio
 import uuid
 import logging
+import time
 import aiohttp 
 from datetime import datetime
 from src.data.database import Database
@@ -10,6 +15,10 @@ from src.data.database import Database
 logger = logging.getLogger("TripHub.Finance")
 
 class FinanceService:
+    
+    # Controle de Cache da API para evitar bloqueio e lentidão no UI
+    _last_rate_update = 0
+    _CACHE_TTL = 600 # 10 minutos
     
     # Taxas padrão (Fallback seguro)
     RATES_DISPLAY = {
@@ -19,16 +28,21 @@ class FinanceService:
         "PYG": {"flag": "🇵🇾", "name": "Guarani", "val": 0.0007, "symbol": "₲"}
     }
 
-    # [CORREÇÃO] Migrado para AwesomeAPI (igual ao Smart Banner) para garantir valores corretos
+    # Migrado para AwesomeAPI (igual ao Smart Banner) para garantir valores corretos
     API_AWESOME = "https://economia.awesomeapi.com.br/last/USD-BRL,BRL-PYG"
     API_BLUE = "https://api.bluelytics.com.ar/v2/latest"
 
-    # --- API DE TAXAS (BLINDADA) ---
+    # --- API DE TAXAS (BLINDADA E COM CACHE) ---
     @classmethod
     async def update_rates(cls):
         """
-        Busca taxas online usando AwesomeAPI (mesma fonte do Banner) e Bluelytics.
+        Busca taxas online. Usa cache para não travar a aplicação com requisições simultâneas.
         """
+        now = time.time()
+        # Se ainda estiver no tempo de cache, não faz requisição e retorna rápido
+        if now - cls._last_rate_update < cls._CACHE_TTL:
+            return True
+            
         logger.info("Iniciando atualização de câmbio (AwesomeAPI + Bluelytics)...")
         
         # Headers para evitar bloqueio (WAF)
@@ -37,28 +51,21 @@ class FinanceService:
             "Accept": "application/json"
         }
         
-        timeout = aiohttp.ClientTimeout(total=10)
-        # ssl=False mantido para compatibilidade máxima no Docker dev
+        timeout = aiohttp.ClientTimeout(total=5) # Timeout reduzido para evitar lag na navegação
         connector = aiohttp.TCPConnector(ssl=False)
 
         async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
             # --- 1. AwesomeAPI (Dólar e Guarani) ---
             try:
-                logger.info(f"Consultando: {cls.API_AWESOME}")
                 async with session.get(cls.API_AWESOME) as response:
                     if response.status == 200:
                         data = await response.json()
                         
-                        # Atualiza Dólar (USD -> BRL)
-                        # Awesome retorna: "USDBRL": {"bid": "5.75"}
                         if "USDBRL" in data:
                             val_usd = float(data["USDBRL"]["bid"])
                             cls.RATES_DISPLAY["USD"]["val"] = val_usd
                             logger.info(f"✅ Dólar Oficial (Awesome): R$ {val_usd:.3f}")
                         
-                        # Atualiza Guarani (BRL -> PYG)
-                        # Awesome retorna: "BRLPYG": {"bid": "1350.00"} (1 Real vale X Guaranis)
-                        # O sistema guarda o INVERSO (Quanto custa 1 Guarani em Reais)
                         if "BRLPYG" in data:
                             guaranis_per_real = float(data["BRLPYG"]["bid"])
                             if guaranis_per_real > 0:
@@ -68,7 +75,7 @@ class FinanceService:
                         logger.warning(f"⚠️ AwesomeAPI retornou erro: {response.status}")
             
             except asyncio.TimeoutError:
-                logger.warning("⏳ Timeout na AwesomeAPI (Verifique conexão).")
+                logger.warning("⏳ Timeout na AwesomeAPI (Usando valores locais).")
             except Exception as e:
                 logger.error(f"❌ Erro na AwesomeAPI: {e}")
 
@@ -79,18 +86,15 @@ class FinanceService:
                         data = await response.json()
                         blue_sell = data["blue"]["value_sell"]
                         if blue_sell > 0:
-                            # Ajuste: Cotação relativa ao Dólar do dia
-                            # Se 1 USD vale 6 Reais e 1 USD vale 1200 Pesos
-                            # Então 1 Real vale 200 Pesos.
                             usd_val = cls.RATES_DISPLAY["USD"]["val"]
                             val_peso_em_reais = usd_val / blue_sell
-                            
                             cls.RATES_DISPLAY["ARS"]["val"] = val_peso_em_reais
-                            
                             logger.info(f"✅ Peso Blue Atualizado: 1 USD = ${blue_sell:.0f} ARS")
             except Exception as e: 
                 logger.error(f"❌ Erro no Bluelytics: {e}")
                 
+        # Só atualiza a marca de tempo se não houve uma falha catastrófica geral
+        cls._last_rate_update = time.time()
         return True
 
     @staticmethod
