@@ -1,0 +1,6 @@
+2026-02-24 11:26:42 | INFO     | TripHub.Main    | >>> STARTUP: Iniciando Trip Hub...
+2026-02-24 11:26:42 | INFO     | TripHub.Main    | Banco de dados conectado e inicializado.
+2026-02-24 11:26:42 | INFO     | AuthService     | Iniciando Verificação de Integridade dos Dados...
+2026-02-24 11:26:42 | INFO     | AuthService     | Verificação Concluída. 3 perfis ativos.
+2026-02-24 11:26:42 | INFO     | TripHub.Main    | Definindo rota inicial para: /dashboard
+2026-02-24 11:26:44 | INFO     | AuthService     | Login realizado com sucesso: RFM

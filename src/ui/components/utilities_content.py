@@ -13,8 +13,8 @@ class UtilitiesContent(ft.Container):
         self.user_id = self.main_page.user_profile["id"]
         
         # --- VERIFICAÇÃO ROBUSTA DE LEITURA ---
-        # Usa o serviço JSON (ProtocolService), não o cache do navegador
-        self.is_unlocked = ProtocolService.has_read(self.user_id)
+        # Valor inicial (será atualizado via async no did_mount)
+        self.is_unlocked = False
 
         # --- COMPONENTES ---
         self.info_hub = InfoHub(self.main_page, self._unlock_tools)
@@ -101,6 +101,14 @@ class UtilitiesContent(ft.Container):
             real_control = container.content.controls[0]
             real_control.disabled = not self.is_unlocked
             real_control.opacity = 0.2 if not self.is_unlocked else 1.0
+
+    def did_mount(self):
+        self.main_page.run_task(self._check_protocol_status)
+
+    async def _check_protocol_status(self):
+        self.is_unlocked = await ProtocolService.has_read(self.user_id)
+        self._apply_lock_state()
+        self.tools_container.update()
 
     def _unlock_tools(self):
         self.is_unlocked = True

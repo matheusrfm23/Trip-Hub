@@ -236,6 +236,7 @@ class DashboardView(ft.View):
         self.tab_content_area.content = self.notif_list
         self.main_page.run_task(self._fetch_notifications)
         
+        # [CORREÇÃO] Usa padrão de overlay seguro
         if self.notif_dialog not in self.main_page.overlay:
             self.main_page.overlay.append(self.notif_dialog)
         self.notif_dialog.open = True
@@ -243,7 +244,7 @@ class DashboardView(ft.View):
 
     def _close_notification_dialog(self, e):
         self.notif_dialog.open = False
-        self.main_page.overlay.clear() 
+        # [CORREÇÃO] Não limpar overlay para evitar erro em outros dialogs
         self.main_page.update()
 
     async def _clear_all_notifications(self, e):

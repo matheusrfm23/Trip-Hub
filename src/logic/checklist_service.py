@@ -1,62 +1,69 @@
-# ARQUIVO: src/logic/checklist_service.py
 import json
-import os
-from src.core.locker import file_lock  # <--- IMPORTANTE: O Cadeado
+from src.data.database import Database
+from src.core.logger import get_logger
+from src.core.profiler import track_execution
+
+log = get_logger("ChecklistService")
 
 class ChecklistService:
-    FILE_PATH = "assets/data/checklists.json"
-
     @staticmethod
-    def _ensure_file_exists():
-        if not os.path.exists(ChecklistService.FILE_PATH):
-            os.makedirs(os.path.dirname(ChecklistService.FILE_PATH), exist_ok=True)
-            # Proteção na criação
-            with file_lock():
-                with open(ChecklistService.FILE_PATH, "w") as f:
-                    json.dump({}, f)
-
-    @staticmethod
-    def get_checklist(user_id):
-        """Leitura segura (sem lock bloqueante, mas garantindo existência)"""
-        ChecklistService._ensure_file_exists()
+    @track_execution(threshold=0.5)
+    async def get_checklist(user_id):
+        conn = Database.get_connection()
         try:
-            with open(ChecklistService.FILE_PATH, "r") as f:
-                data = json.load(f)
-            return data.get(str(user_id), [])
-        except:
+            cursor = conn.cursor()
+            cursor.execute("SELECT items FROM checklists WHERE user_id = ?", (str(user_id),))
+            row = cursor.fetchone()
+
+            if row and row["items"]:
+                try:
+                    return json.loads(row["items"])
+                except Exception as e:
+                    log.error(f"Erro ao decodificar checklist do usuario {user_id}: {e}")
+                    return []
             return []
+        except Exception as e:
+            log.error(f"Erro get_checklist: {e}")
+            return []
+        finally:
+            conn.close()
 
     @staticmethod
-    def save_checklist(user_id, items):
-        """Salva a checklist do usuário preservando as dos outros."""
-        ChecklistService._ensure_file_exists()
+    @track_execution(threshold=0.5)
+    async def save_checklist(user_id, items):
+        conn = Database.get_connection()
         try:
-            # BLINDAGEM: Bloqueia o arquivo para ler E escrever
-            with file_lock():
-                # 1. Lê o estado atual
-                with open(ChecklistService.FILE_PATH, "r") as f:
-                    data = json.load(f)
-                
-                # 2. Atualiza apenas este usuário
-                data[str(user_id)] = items
-                
-                # 3. Salva tudo de volta
-                with open(ChecklistService.FILE_PATH, "w") as f:
-                    json.dump(data, f, indent=4)
+            items_json = json.dumps(items, ensure_ascii=False)
+            cursor = conn.cursor()
+            # INSERT OR REPLACE funciona como um Upsert simplificado no SQLite
+            cursor.execute(
+                "INSERT OR REPLACE INTO checklists (user_id, items) VALUES (?, ?)",
+                (str(user_id), items_json)
+            )
+            conn.commit()
             return True
         except Exception as e:
-            print(f"Erro ao salvar checklist: {e}")
+            log.error(f"Erro ao salvar checklist: {e}")
             return False
+        finally:
+            conn.close()
 
     @staticmethod
-    def reset_checks(user_id):
-        """Zera os 'checks' mas mantém os itens (para a viagem de volta)"""
-        # Pega a lista atual
-        items = ChecklistService.get_checklist(user_id)
-        
-        # Modifica em memória
-        for item in items:
-            item["checked"] = False
+    @track_execution(threshold=0.5)
+    async def reset_checks(user_id):
+        """Zera os 'checks' mas mantém os itens"""
+        try:
+            # Pega do banco
+            items = await ChecklistService.get_checklist(user_id)
+
+            if not items: return True
             
-        # Salva (o método save_checklist já tem o lock, então é seguro)
-        return ChecklistService.save_checklist(user_id, items)
+            # Modifica em memória
+            for item in items:
+                item["checked"] = False
+
+            # Salva de volta
+            return await ChecklistService.save_checklist(user_id, items)
+        except Exception as e:
+            log.error(f"Erro reset_checks: {e}")
+            return False

@@ -15,7 +15,9 @@ class ConverterCard(ft.Card):
             text_style=ft.TextStyle(size=16, weight="bold"),
             border_color=ft.Colors.CYAN, prefix_icon=ft.Icons.MONETIZATION_ON,
             height=48, content_padding=10,
-            on_change=self._on_money_change
+            on_change=self._on_money_change_format_only, # [CORREÇÃO] Apenas formata visualmente
+            on_blur=self._calc_convert, # [CORREÇÃO] Calcula ao sair
+            on_submit=self._calc_convert # [CORREÇÃO] Calcula ao enter
         )
         
         self.calc_result_str = ft.Text("0.00", size=14, weight="bold", color=ft.Colors.CYAN_200)
@@ -60,9 +62,9 @@ class ConverterCard(ft.Card):
         e.control.value = formatted
         e.control.update()
 
-    def _on_money_change(self, e):
+    def _on_money_change_format_only(self, e):
         self._format_money_live(e)
-        self._calc_convert(None)
+        # self._calc_convert(None) # [CORREÇÃO] Removido calculo pesado do on_change
 
     def _calc_convert(self, e):
         try:

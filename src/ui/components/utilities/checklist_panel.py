@@ -93,10 +93,12 @@ class ChecklistPanel(ft.Container):
         self.content = self.expansion_tile
 
     def did_mount(self):
-        self._load_items()
+        # [CORREÇÃO] Execução assíncrona segura no did_mount
+        self.page_ref.run_task(self._load_items)
 
-    def _load_items(self):
-        self.items = ChecklistService.get_checklist(self.user_id)
+    async def _load_items(self):
+        # [CORREÇÃO] await na chamada do serviço
+        self.items = await ChecklistService.get_checklist(self.user_id)
         self._render_list()
 
     def _render_list(self):
@@ -122,7 +124,7 @@ class ChecklistPanel(ft.Container):
                 label_style=text_style,
                 active_color=ft.Colors.CYAN,
                 check_color=ft.Colors.BLACK,
-                on_change=lambda e, i=item: self._toggle_item(e, i)
+                on_change=lambda e, i=item: self.page_ref.run_task(self._toggle_item, e, i) # Task async
             )
 
             delete_btn = ft.IconButton(
@@ -130,7 +132,7 @@ class ChecklistPanel(ft.Container):
                 icon_color=ft.Colors.RED_900 if is_checked else ft.Colors.RED_400, 
                 icon_size=16,
                 tooltip="Remover item",
-                on_click=lambda e, i=item: self._delete_item(i)
+                on_click=lambda e, i=item: self.page_ref.run_task(self._delete_item, i) # Task async
             )
 
             row = ft.Container(
@@ -153,9 +155,10 @@ class ChecklistPanel(ft.Container):
         self.txt_status.value = f"{int(progress * 100)}%"
         self.update()
 
-    def _toggle_item(self, e, item):
+    async def _toggle_item(self, e, item):
         item["checked"] = e.control.value
-        ChecklistService.save_checklist(self.user_id, self.items)
+        # [CORREÇÃO] await na gravação
+        await ChecklistService.save_checklist(self.user_id, self.items)
         self._render_list()
 
     async def _add_item(self, e):
@@ -167,7 +170,8 @@ class ChecklistPanel(ft.Container):
                 "checked": False
             }
             self.items.insert(0, new_item)
-            ChecklistService.save_checklist(self.user_id, self.items)
+            # [CORREÇÃO] await na gravação
+            await ChecklistService.save_checklist(self.user_id, self.items)
             self.tf_new_item.value = ""
             self._render_list()
             
@@ -176,14 +180,17 @@ class ChecklistPanel(ft.Container):
             except:
                 pass 
 
-    def _delete_item(self, item):
+    async def _delete_item(self, item):
         self.items.remove(item)
-        ChecklistService.save_checklist(self.user_id, self.items)
+        # [CORREÇÃO] await na gravação
+        await ChecklistService.save_checklist(self.user_id, self.items)
         self._render_list()
 
-    def _reset_list(self, e):
-        self.items = ChecklistService.reset_checks(self.user_id)
-        self._render_list()
+    async def _reset_list(self, e):
+        # [CORREÇÃO] await na chamada do serviço
+        self.items = await ChecklistService.reset_checks(self.user_id)
+        if not self.items: self.items = [] # Garante lista se retorno for None/False
+        self._load_items() # Recarrega para garantir sincronia
         
         # CORREÇÃO: Método compatível de SnackBar
         snack = ft.SnackBar(content=ft.Text("Checklist limpo para nova viagem!"))

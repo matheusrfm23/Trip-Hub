@@ -67,7 +67,7 @@ class Router:
             if route == "/login":
                 if hasattr(self.page, "user_profile") and self.page.user_profile:
                      # [CORREÇÃO] Uso da nova API push_route para evitar warnings
-                     self.page.push_route("/dashboard") 
+                     await self.page.push_route("/dashboard")
                      return
                 self.page.views.append(LoginView(self.page))
             
@@ -75,6 +75,11 @@ class Router:
                 self.page.views.append(DashboardView(self.page))
             
             elif troute.match("/country/:code"):
+                # [CORREÇÃO] Regra do Histórico (Efeito Facebook)
+                # Garante que o Dashboard está na base se entrarmos direto via URL
+                dashboard_exists = any(isinstance(v, DashboardView) for v in self.page.views)
+                if not dashboard_exists:
+                    self.page.views.append(DashboardView(self.page))
                 self.page.views.append(CountryView(self.page, troute.code))
             
             elif route == "/error":
@@ -83,9 +88,9 @@ class Router:
             else:
                 # Rota 404 - Redirecionamento Inteligente
                 if hasattr(self.page, "user_profile") and self.page.user_profile:
-                    self.page.push_route("/dashboard")
+                    await self.page.push_route("/dashboard")
                 else:
-                    self.page.push_route("/login")
+                    await self.page.push_route("/login")
 
         except Exception as e:
             error_msg = traceback.format_exc()
@@ -132,8 +137,8 @@ class Router:
                         ft.Icon(ft.Icons.ERROR_OUTLINE, size=60, color=ft.Colors.WHITE),
                         ft.Text("Erro Crítico", size=24, weight="bold"),
                         ft.Text(str(msg), color=ft.Colors.WHITE30),
-                        # [CORREÇÃO] Atualizado para push_route
-                        ft.ElevatedButton("Reiniciar", on_click=lambda _: self.page.push_route("/login"))
+                        # [CORREÇÃO] Atualizado para push_route (async wrapper lambda)
+                        ft.ElevatedButton("Reiniciar", on_click=lambda _: self.page.run_task(self.page.push_route, "/login"))
                     ], alignment="center", horizontal_alignment="center")
                 ]
             )

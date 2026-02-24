@@ -1,57 +1,70 @@
 import time
 import functools
 import asyncio
-import traceback
-from src.core.logger import get_logger
+from src.core.logger import get_logger, TripHubLogger
 
-# Logger exclusivo para performance
-perf_logger = get_logger("PERFORMANCE")
+logger = get_logger("Profiler")
 
-def monitor(threshold=0.5):
+def track_execution(threshold=1.0):
     """
-    Decorator para monitorar tempo de execução e erros.
-    threshold: Tempo máximo (segundos) antes de emitir um alerta de lentidão.
+    Decorator para medir tempo de execução.
+    Se MONITORING_LEVEL == FULL: Loga argumentos e tempo.
+    Se MONITORING_LEVEL == BASIC: Loga apenas tempo se exceder threshold.
+    Se MONITORING_LEVEL == ERROR_ONLY: Loga apenas se der erro (exceção).
     """
     def decorator(func):
         @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def wrapper_async(*args, **kwargs):
+            level = TripHubLogger.get_monitoring_level()
             start_time = time.perf_counter()
-            func_name = func.__name__
+
+            # Log de entrada (FULL)
+            if level == "FULL":
+                logger.debug(f"[ENTER] {func.__name__} args={args} kwargs={kwargs}")
+
             try:
                 result = await func(*args, **kwargs)
                 return result
             except Exception as e:
-                perf_logger.error(f"❌ ERRO em '{func_name}': {str(e)}")
-                perf_logger.debug(traceback.format_exc()) # Loga o erro completo no arquivo
-                raise e # Repassa o erro para o sistema tratar
-            finally:
-                end_time = time.perf_counter()
-                duration = end_time - start_time
-                
-                if duration > threshold:
-                    perf_logger.warning(f"🐢 LENTIDÃO: '{func_name}' levou {duration:.4f}s (Limite: {threshold}s)")
-                else:
-                    # Opcional: Descomente para ver tudo que roda
-                    # perf_logger.debug(f"⚡ '{func_name}' executou em {duration:.4f}s")
-                    pass
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            start_time = time.perf_counter()
-            func_name = func.__name__
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                perf_logger.error(f"❌ ERRO em '{func_name}': {str(e)}")
-                perf_logger.debug(traceback.format_exc())
+                logger.error(f"[CRASH] {func.__name__} falhou: {str(e)}", exc_info=True)
                 raise e
             finally:
-                end_time = time.perf_counter()
-                duration = end_time - start_time
-                if duration > threshold:
-                    perf_logger.warning(f"🐢 LENTIDÃO: '{func_name}' levou {duration:.4f}s")
+                elapsed = time.perf_counter() - start_time
+
+                # Log de saída/performance
+                if level == "FULL":
+                    logger.debug(f"[EXIT] {func.__name__} executou em {elapsed:.4f}s")
+                elif level == "BASIC":
+                    if elapsed > threshold:
+                        logger.warning(f"[SLOW] {func.__name__} demorou {elapsed:.4f}s (Limite: {threshold}s)")
+
+        @functools.wraps(func)
+        def wrapper_sync(*args, **kwargs):
+            level = TripHubLogger.get_monitoring_level()
+            start_time = time.perf_counter()
+
+            if level == "FULL":
+                logger.debug(f"[ENTER] {func.__name__} args={args} kwargs={kwargs}")
+
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                logger.error(f"[CRASH] {func.__name__} falhou: {str(e)}", exc_info=True)
+                raise e
+            finally:
+                elapsed = time.perf_counter() - start_time
+
+                if level == "FULL":
+                    logger.debug(f"[EXIT] {func.__name__} executou em {elapsed:.4f}s")
+                elif level == "BASIC":
+                    if elapsed > threshold:
+                        logger.warning(f"[SLOW] {func.__name__} demorou {elapsed:.4f}s (Limite: {threshold}s)")
 
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
+            return wrapper_async
+        return wrapper_sync
     return decorator
+
+# Alias para compatibilidade se necessário, mas o padrão agora é @track_execution
+monitor = track_execution

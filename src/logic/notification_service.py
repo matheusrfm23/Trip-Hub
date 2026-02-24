@@ -1,126 +1,150 @@
 # ARQUIVO: src/logic/notification_service.py
 import json
-import os
 import uuid
+import asyncio
 from datetime import datetime
-from src.core.locker import file_lock  # <--- IMPORTANTE: O Cadeado
+from src.data.database import Database
+from src.core.logger import get_logger
+from src.core.profiler import track_execution
+
+log = get_logger("NotificationService")
 
 class NotificationService:
-    FILE_PATH = os.path.join("assets", "data", "notifications.json")
+    @staticmethod
+    def _row_to_dict(row):
+        if not row: return None
+        data = dict(row)
+        if data.get("read_by"):
+            try:
+                data["read_by"] = json.loads(data["read_by"])
+            except:
+                data["read_by"] = []
+        else:
+            data["read_by"] = []
+        return data
 
     @classmethod
-    def _init_db(cls):
-        os.makedirs(os.path.dirname(cls.FILE_PATH), exist_ok=True)
-        if not os.path.exists(cls.FILE_PATH):
-            with file_lock():
-                with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump([], f, indent=4, ensure_ascii=False)
-
-    @classmethod
-    def _read_file_internal(cls):
-        """Lê o arquivo sem lock (deve ser chamado dentro de um lock ou para leitura simples)"""
-        cls._init_db()
-        try:
-            with open(cls.FILE_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except: return []
-
-    @classmethod
-    def _write_file_internal(cls, data):
-        """Escreve no arquivo sem lock (o caller deve garantir o lock)"""
-        try:
-            with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"Erro ao salvar notificações: {e}")
-
-    @classmethod
+    @track_execution(threshold=0.5)
     async def get_notifications(cls, user_id):
-        # Leitura isolada não precisa de lock estrito, mas init_db garante que arquivo existe
-        all_notifs = cls._read_file_internal()
-        
-        my_notifs = [
-            n for n in all_notifs 
-            if n["target_id"] == "ALL" or str(n["target_id"]) == str(user_id)
-        ]
-        # Ordena: Mais recentes primeiro
-        my_notifs.sort(key=lambda x: x["timestamp"], reverse=True)
-        return my_notifs
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM notifications WHERE target_id = 'ALL' OR target_id = ? ORDER BY timestamp DESC",
+                (str(user_id),)
+            )
+            rows = cursor.fetchall()
+            return [cls._row_to_dict(row) for row in rows]
+        except Exception as e:
+            log.error(f"Erro ao buscar notificações: {e}")
+            return []
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.2)
     async def get_unread_count(cls, user_id):
-        notifs = await cls.get_notifications(user_id)
-        count = 0
-        for n in notifs:
-            if str(user_id) not in n.get("read_by", []):
-                count += 1
-        return count
-
-    # --- MÉTODOS DE ESCRITA (BLINDADOS) ---
+        conn = Database.get_connection()
+        try:
+            # Busca todas e filtra no Python por simplicidade (devido ao JSON)
+            # Otimização futura: usar JSON_EACH do SQLite se disponível
+            notifs = await cls.get_notifications(user_id)
+            count = 0
+            for n in notifs:
+                if str(user_id) not in n.get("read_by", []):
+                    count += 1
+            return count
+        except Exception as e:
+            log.error(f"Erro count notificações: {e}")
+            return 0
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def mark_as_read(cls, notif_id, user_id):
-        # Lock envolve Leitura + Modificação + Escrita para evitar conflito
-        with file_lock():
-            all_notifs = cls._read_file_internal()
-            changed = False
-            for n in all_notifs:
-                if n["id"] == notif_id:
-                    if "read_by" not in n: n["read_by"] = []
-                    if str(user_id) not in n["read_by"]:
-                        n["read_by"].append(str(user_id))
-                        changed = True
-                    break
+        conn = Database.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT read_by FROM notifications WHERE id = ?", (notif_id,))
+            row = cursor.fetchone()
+            if not row: return False
             
-            if changed:
-                cls._write_file_internal(all_notifs)
+            read_by = []
+            if row["read_by"]:
+                try: read_by = json.loads(row["read_by"])
+                except: pass
+
+            if str(user_id) not in read_by:
+                read_by.append(str(user_id))
+                new_json = json.dumps(read_by, ensure_ascii=False)
+                cursor.execute("UPDATE notifications SET read_by = ? WHERE id = ?", (new_json, notif_id))
+                conn.commit()
+                return True
+            return False
+        except Exception as e:
+            log.error(f"Erro mark_as_read: {e}")
+            return False
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=1.0)
     async def mark_all_read(cls, user_id):
-        with file_lock():
-            all_notifs = cls._read_file_internal()
-            changed = False
-            for n in all_notifs:
-                if n["target_id"] == "ALL" or str(n["target_id"]) == str(user_id):
-                    if "read_by" not in n: n["read_by"] = []
-                    if str(user_id) not in n["read_by"]:
-                        n["read_by"].append(str(user_id))
-                        changed = True
-            
-            if changed:
-                cls._write_file_internal(all_notifs)
+        # Implementação iterativa segura
+        notifs = await cls.get_notifications(user_id)
+        for n in notifs:
+            await cls.mark_as_read(n["id"], user_id)
+        return True
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def send_notification(cls, sender_name, target_id, title, message, type="info"):
-        with file_lock():
-            all_notifs = cls._read_file_internal()
+        conn = Database.get_connection()
+        try:
+            new_id = str(uuid.uuid4())
+            ts = datetime.now().strftime("%d/%m %H:%M") # Formato legado
+            read_by = json.dumps([], ensure_ascii=False)
             
-            new_notif = {
-                "id": str(uuid.uuid4()),
-                "sender": sender_name,
-                "target_id": target_id,
-                "title": title,
-                "message": message,
-                "type": type,
-                "timestamp": datetime.now().strftime("%d/%m %H:%M"),
-                "read_by": []
-            }
-            all_notifs.append(new_notif)
-            
-            cls._write_file_internal(all_notifs)
-        return True
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO notifications (id, sender, target_id, title, message, type, timestamp, read_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (new_id, sender_name, str(target_id), title, message, type, ts, read_by))
+            conn.commit()
+            return True
+        except Exception as e:
+            log.error(f"Erro send_notification: {e}")
+            return False
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=1.0)
     async def clear_all(cls):
-        """Apaga TODAS as notificações do sistema (Função Admin)."""
-        with file_lock():
-            cls._write_file_internal([]) 
-        return True
+        """Apaga TODAS as notificações (Admin)."""
+        conn = Database.get_connection()
+        try:
+            conn.execute("DELETE FROM notifications")
+            conn.commit()
+            log.warning("Todas as notificações foram apagadas.")
+            return True
+        except Exception as e:
+            log.error(f"Erro clear_all: {e}")
+            return False
+        finally:
+            conn.close()
 
     @classmethod
+    @track_execution(threshold=0.5)
     async def delete_notification(cls, notif_id):
-        with file_lock():
-            all_notifs = cls._read_file_internal()
-            new_list = [n for n in all_notifs if n["id"] != notif_id]
-            cls._write_file_internal(new_list)
-        return True
+        conn = Database.get_connection()
+        try:
+            conn.execute("DELETE FROM notifications WHERE id = ?", (notif_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            log.error(f"Erro delete_notification: {e}")
+            return False
+        finally:
+            conn.close()
