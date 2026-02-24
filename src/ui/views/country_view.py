@@ -1,148 +1,280 @@
-# ARQUIVO: src/ui/views/country_view.py
 import flet as ft
-from src.ui.components.content_factory import ContentFactory
+import traceback
+from src.logic.place_service import PlaceService
+from src.ui.components.places.place_modal_manager import PlaceModalManager
+from src.ui.components.places.place_form import PlaceForm
+from src.ui.components.places.cards.modern_hotel_card import ModernHotelCard
+from src.ui.components.places.cards.compact_card import CompactCard
 
 class CountryView(ft.View):
     def __init__(self, page: ft.Page, country_code: str):
-        # [CORREÇÃO] Passa o FAB diretamente para o construtor da View
+        self.main_page = page
+        self.country_code = country_code
+        self.current_category = "hotel"
+        
+        # Configurações do País
+        self.configs = {
+            "br": {"name": "Brasil", "flag": "🇧🇷", "color": ft.Colors.GREEN_900, "grad": [ft.Colors.GREEN_900, ft.Colors.BLACK]},
+            "ar": {"name": "Argentina", "flag": "🇦🇷", "color": ft.Colors.BLUE_900, "grad": [ft.Colors.BLUE_900, ft.Colors.BLACK]},
+            "py": {"name": "Paraguai", "flag": "🇵🇾", "color": ft.Colors.RED_900, "grad": [ft.Colors.RED_900, ft.Colors.BLACK]},
+        }
+        self.cfg = self.configs.get(country_code, self.configs["br"])
+
+        # Gerenciadores de Lógica (Modais e Formulários)
+        self.modal_manager = PlaceModalManager(page, on_data_change=self._refresh_data)
+        self.place_form = PlaceForm(page, on_save_callback=self._on_form_save)
+
+        # Botão de Adicionar (FAB) - Exigência do cliente
+        fab = ft.FloatingActionButton(
+            icon=ft.Icons.ADD,
+            bgcolor=ft.Colors.CYAN,
+            on_click=lambda _: self.place_form.open(self.current_category, None)
+        )
+
         super().__init__(
             route=f"/country/{country_code}",
             padding=0,
             bgcolor=ft.Colors.BLACK,
-            floating_action_button=ft.FloatingActionButton(
-                icon=ft.Icons.ADD,
-                bgcolor=ft.Colors.CYAN,
-                on_click=self._on_fab_click,
-                visible=False # Invisível por padrão, até carregar conteúdo
-            )
+            floating_action_button=fab
         )
-        self.main_page = page
-        self.current_country = country_code
-        self.current_category = "hotel"
+
+        # Estado
+        user = getattr(page, 'user_profile', {})
+        self.current_user_id = user.get("name", "User1")
+        self.is_admin = user.get("role") == "ADMIN"
         
-        self.configs = {
-            "br": {"name": "Brasil", "flag": "🇧🇷", "color": ft.Colors.GREEN_900},
-            "ar": {"name": "Argentina", "flag": "🇦🇷", "color": ft.Colors.BLUE_900},
-            "py": {"name": "Paraguai", "flag": "🇵🇾", "color": ft.Colors.RED_900},
-        }
-        self.cfg = self.configs.get(country_code, self.configs["br"])
+        # Componentes de UI
+        self.content_area = ft.Container(expand=True, padding=10, alignment=ft.Alignment(0, -1))
+        self.loading = ft.ProgressBar(width=100, color=ft.Colors.CYAN, visible=False)
 
-        # --- SELETOR DE PAÍS (Chip Style) ---
-        self.country_row = ft.Row(scroll=ft.ScrollMode.HIDDEN, spacing=10)
-        self._build_country_selector()
+        # Montagem do Layout Principal
+        self.controls = [
+            self._build_header(),
+            self._build_category_selector(),
+            ft.Container(content=self.loading, alignment=ft.Alignment(0, 0), height=5), # Barra de loading discreta
+            self.content_area
+        ]
 
-        # --- TOP BAR ---
-        self.top_bar = ft.Container(
-            padding=ft.padding.only(left=5, right=10, top=5, bottom=5),
-            bgcolor=self.cfg["color"],
+    def did_mount(self):
+        # Inicia carregamento de dados assim que a view é montada
+        self.page.run_task(self._load_data)
+
+    def _refresh_data(self):
+        self.loading.visible = True
+        self.update()
+        self.page.run_task(self._load_data)
+
+    async def _load_data(self):
+        self.loading.visible = True
+        try:
+            self.update()
+        except: pass
+
+        try:
+            places = await PlaceService.get_places(self.country_code, self.current_category)
+            self._render_items(places)
+        except Exception as e:
+            print(f"Erro ao carregar locais: {e}")
+            traceback.print_exc()
+            self.content_area.content = ft.Container(
+                content=ft.Text(f"Erro ao carregar: {e}", color=ft.Colors.RED),
+                alignment=ft.Alignment(0, 0),
+                padding=20
+            )
+            self.content_area.update()
+        finally:
+            self.loading.visible = False
+            try: self.update()
+            except: pass
+
+    def _render_items(self, places):
+        if not places:
+            self.content_area.content = ft.Container(
+                content=ft.Column([
+                    ft.Icon(ft.Icons.SEARCH_OFF, size=50, color=ft.Colors.GREY_700),
+                    ft.Text("Nenhum local encontrado.", color=ft.Colors.GREY_600)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                alignment=ft.Alignment(0, 0),
+                padding=50
+            )
+            self.content_area.update()
+            return
+
+        is_hotel = (self.current_category == "hotel")
+
+        # Grid para categorias comuns, Lista para Hoteis (cards grandes)
+        if not is_hotel:
+            grid = ft.GridView(expand=True, runs_count=2, child_aspect_ratio=0.85, spacing=10, run_spacing=10)
+            for item in places:
+                card = CompactCard(
+                    item=item,
+                    current_user=self.current_user_id,
+                    images=self.modal_manager._get_images(item["id"]),
+                    on_click_callback=lambda i: self.modal_manager.show_details(i, self._open_edit, self._delete_place),
+                    on_vote_callback=self._handle_vote
+                )
+                grid.controls.append(card)
+            self.content_area.content = grid
+        else:
+            # Lista Vertical para Hoteis
+            col = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True, spacing=15)
+            for item in places:
+                # Callbacks específicos para o ModernHotelCard
+                callbacks = {
+                    "on_edit": self._open_edit,
+                    "on_delete": self._delete_place,
+                    "on_add_photo": self.modal_manager.open_photo_manager,
+                    "on_delete_photo": self.modal_manager.delete_photo,
+                    "on_open_map": lambda link: self.page.run_task(self.modal_manager.safe_launch_url, link),
+                    "on_copy": lambda txt: self.page.run_task(self.modal_manager.smart_copy, txt),
+                    "on_zoom": self.modal_manager.open_zoom
+                }
+                card = ModernHotelCard(
+                    item=item,
+                    is_admin=self.is_admin,
+                    images=self.modal_manager._get_images(item["id"]),
+                    callbacks=callbacks
+                )
+                col.controls.append(card)
+            self.content_area.content = col
+
+        self.content_area.update()
+
+    # --- ACTIONS ---
+
+    def _open_edit(self, item):
+        if self.modal_manager.current_modal and self.modal_manager.current_modal.open:
+            self.modal_manager.close_modal(self.modal_manager.current_modal)
+        self.place_form.open(self.current_category, item)
+
+    def _delete_place(self, item):
+        # Wrapper para deletar item
+        async def _action():
+            await PlaceService.delete_place(item["id"], self.country_code, self.current_category)
+            if self.modal_manager.current_modal:
+                self.modal_manager.close_modal(self.modal_manager.current_modal)
+            self._refresh_data()
+            
+        self.page.run_task(_action)
+
+    def _handle_vote(self, e, item):
+        # Ação de votar
+        async def _action():
+            await PlaceService.toggle_vote(item["id"], self.country_code, self.current_category, self.current_user_id)
+            # Atualiza dados silenciosamente para refletir votos novos
+            places = await PlaceService.get_places(self.country_code, self.current_category)
+            # Não rebuilda tudo para não perder scroll, idealmente atualizaria só o card,
+            # mas por simplicidade e garantia de consistência, recarregamos.
+            # Se quiser otimizar, poderia atualizar só o contador localmente.
+            self._render_items(places)
+            self.update()
+
+        self.page.run_task(_action)
+
+    async def _on_form_save(self, item_id, data_dict):
+        self.loading.visible = True
+        self.update()
+
+        data_dict.update({"country": self.country_code, "category": self.current_category})
+
+        if item_id:
+            await PlaceService.update_place(item_id, data_dict)
+        else:
+            data_dict["added_by"] = self.current_user_id
+            await PlaceService.add_place(data_dict)
+
+        self._refresh_data()
+
+    # --- UI BUILDERS ---
+
+    def _build_header(self):
+        return ft.Container(
+            height=80,
+            decoration=ft.BoxDecoration(
+                gradient=ft.LinearGradient(
+                    begin=ft.Alignment(0, -1),
+                    end=ft.Alignment(0, 1),
+                    colors=self.cfg.get("grad", [ft.Colors.GREY_900, ft.Colors.BLACK])
+                )
+            ),
+            padding=ft.padding.symmetric(horizontal=15),
             content=ft.Row([
-                ft.IconButton(ft.Icons.ARROW_BACK, icon_color=ft.Colors.WHITE, on_click=lambda _: self.main_page.go("/dashboard")),
-                ft.Container(content=self.country_row, expand=True, clip_behavior=ft.ClipBehavior.HARD_EDGE)
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=ft.Colors.WHITE,
+                    on_click=lambda _: self._navigate_home()
+                ),
+                ft.Column([
+                    ft.Text(self.cfg["name"].upper(), size=12, weight="bold", color=ft.Colors.WHITE54),
+                    ft.Row([
+                        ft.Text(self.cfg["flag"], size=24),
+                        ft.Text(self.cfg["name"], size=20, weight="bold", color=ft.Colors.WHITE)
+                    ], spacing=10)
+                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                ft.Container(expand=True),
+                # Seletor de País Rápido (Chips)
+                self._build_mini_country_selector()
             ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         )
 
-        # --- SELETOR DE CATEGORIA ---
-        self.cat_row = ft.Row(scroll=ft.ScrollMode.HIDDEN, expand=True, spacing=5)
-        self.categories = [
+    def _navigate_home(self):
+        # Hack para garantir que o histórico funcione bem
+        # self.page.views.clear() # Não limpar para manter histórico se desejado, mas aqui limpamos para evitar acúmulo
+        self.page.go("/dashboard")
+
+    def _build_mini_country_selector(self):
+        row = ft.Row(spacing=5)
+        for code, data in self.configs.items():
+            if code == self.country_code: continue # Não mostra o atual
+            row.controls.append(
+                ft.Container(
+                    content=ft.Text(data["flag"], size=18),
+                    padding=8,
+                    bgcolor=ft.Colors.BLACK26,
+                    border_radius=20,
+                    ink=True,
+                    on_click=lambda e, c=code: self.page.go(f"/country/{c}")
+                )
+            )
+        return row
+
+    def _build_category_selector(self):
+        cats = [
             ("hotel", "Hospedagem", ft.Icons.BED),
             ("food", "Comer", ft.Icons.RESTAURANT),
             ("tour", "Passeios", ft.Icons.MAP),
             ("shop", "Compras", ft.Icons.SHOPPING_BAG)
         ]
-        self._build_cat_selector()
 
-        self.cat_container = ft.Container(
-            padding=ft.padding.symmetric(horizontal=10, vertical=0),
-            bgcolor=ft.Colors.BLACK,
-            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.WHITE10)),
-            content=self.cat_row
-        )
+        row = ft.Row(scroll=ft.ScrollMode.HIDDEN, spacing=10)
 
-        # --- ÁREA DE CONTEÚDO ---
-        self.content_area = ft.Container(expand=True, bgcolor=ft.Colors.BLACK)
-        
-        # Carrega o conteúdo inicial
-        self._load_content(should_update=False)
-
-        self.controls = [
-            self.top_bar,
-            self.cat_container,
-            self.content_area
-        ]
-
-    def _build_country_selector(self):
-        self.country_row.controls = []
-        for code, data in self.configs.items():
-            is_selected = (code == self.current_country)
-            
-            btn = ft.Container(
-                bgcolor=ft.Colors.BLACK26 if is_selected else ft.Colors.TRANSPARENT,
-                border_radius=20,
-                border=ft.border.all(1, ft.Colors.WHITE if is_selected else ft.Colors.TRANSPARENT),
-                padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                on_click=lambda e, c=code: self._set_country(c),
-                content=ft.Row([
-                    ft.Text(data["flag"], size=16),
-                    ft.Text(data["name"], size=12, weight="bold" if is_selected else "normal", color=ft.Colors.WHITE if is_selected else ft.Colors.WHITE54)
-                ], spacing=5, alignment="center")
-            )
-            self.country_row.controls.append(btn)
-
-    def _build_cat_selector(self):
-        self.cat_row.controls = []
-        for key, label, icon in self.categories:
+        for key, label, icon in cats:
             is_selected = (key == self.current_category)
-            color = ft.Colors.CYAN if is_selected else ft.Colors.GREY
+            color = ft.Colors.CYAN if is_selected else ft.Colors.GREY_600
+            bg = ft.Colors.with_opacity(0.1, ft.Colors.CYAN) if is_selected else ft.Colors.TRANSPARENT
             
             btn = ft.Container(
-                padding=ft.padding.symmetric(vertical=12, horizontal=12),
-                border=ft.border.only(bottom=ft.BorderSide(3, color if is_selected else ft.Colors.TRANSPARENT)),
+                bgcolor=bg,
+                border_radius=12,
+                border=ft.border.all(1, color if is_selected else ft.Colors.TRANSPARENT),
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
                 on_click=lambda e, k=key: self._set_category(k),
                 content=ft.Row([
-                    ft.Icon(icon, size=18, color=color),
-                    ft.Text(label, color=color, size=12, weight="bold" if is_selected else "normal")
-                ], spacing=5, alignment="center")
+                    ft.Icon(icon, size=16, color=color),
+                    ft.Text(label, color=color, size=13, weight="bold" if is_selected else "normal")
+                ], spacing=5, alignment=ft.MainAxisAlignment.CENTER)
             )
-            self.cat_row.controls.append(btn)
+            row.controls.append(btn)
 
-    def _set_country(self, code):
-        self.current_country = code
-        self.cfg = self.configs.get(code, self.configs["br"])
-        self.top_bar.bgcolor = self.cfg["color"]
-        self._build_country_selector()
-        self.top_bar.update()
-        self._load_content(True)
+        return ft.Container(
+            padding=ft.padding.only(left=15, right=15, bottom=10),
+            content=row
+        )
 
     def _set_category(self, key):
+        if self.current_category == key: return
         self.current_category = key
-        self._build_cat_selector()
-        self.cat_row.update()
-        self._load_content(True)
-
-    def _load_content(self, should_update=True):
-        try:
-            # Obtém o conteúdo da Factory
-            new_content = ContentFactory.get_content(self.main_page, self.current_country, self.current_category)
-            self.content_area.content = new_content
-
-            # [LÓGICA FAB] Mostra o FAB apenas se o conteúdo suportar adição
-            has_add_feature = hasattr(new_content, "open_add_dialog")
-            if self.floating_action_button:
-                self.floating_action_button.visible = has_add_feature
-
-            if should_update:
-                self.content_area.update()
-                # Atualiza a view para refletir mudança no FAB
-                if self.page: self.update()
-        except Exception as e:
-            print(f"Erro ao carregar factory: {e}")
-            self.content_area.content = ft.Text(f"Erro: {e}", color="red")
-            if should_update: self.content_area.update()
-
-    def _on_fab_click(self, e):
-        # Redireciona o clique para o componente filho (PlaceTab)
-        current_content = self.content_area.content
-        if hasattr(current_content, "open_add_dialog"):
-            current_content.open_add_dialog(e)
-        else:
-            print("Conteúdo atual não suporta adição.")
+        # Reconstrói seletor para atualizar visual (poderia otimizar, mas é rápido)
+        self.controls[1] = self._build_category_selector()
+        self.update()
+        self._refresh_data()

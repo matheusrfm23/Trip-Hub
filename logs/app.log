@@ -1,1 +1,5 @@
 2026-02-24 02:18:58 | INFO     | PlaceService    | Local adicionado: Place (3c2df830-32c2-4caf-b7b3-a51beaec0754)
+2026-02-24 04:33:51 | INFO     | PlaceService    | Local adicionado: Hotel Test (b0675ed6-4726-4955-b222-f00d553c2a53)
+2026-02-24 04:33:51 | INFO     | PlaceService    | Local atualizado: b0675ed6-4726-4955-b222-f00d553c2a53
+2026-02-24 04:33:51 | INFO     | PlaceService    | Local removido: b0675ed6-4726-4955-b222-f00d553c2a53
+2026-02-24 04:33:56 | INFO     | PlaceService    | Local adicionado: H1 (b950c9d1-a169-453d-8096-722b638bd93f)

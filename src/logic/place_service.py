@@ -28,6 +28,10 @@ class PlaceService:
 
         # 2. Flatten extra_data into main dict (CORREÇÃO CRÍTICA)
         if extra_data:
+            # Proteção: Não sobrescrever ID ou colunas de sistema
+            for key in ["id", "country", "category"]:
+                if key in extra_data:
+                    del extra_data[key]
             data.update(extra_data)
 
         # 3. Remove raw JSON columns to clean up

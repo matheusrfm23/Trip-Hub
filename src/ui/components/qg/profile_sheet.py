@@ -27,7 +27,8 @@ class QGProfileSheetManager:
             content=ft.Text("Tem certeza? Esta ação apagará permanentemente o seu Perfil, Voos e Finanças e não tem volta."),
             actions=[
                 ft.TextButton("Cancelar", on_click=self._close_delete_dialog),
-                ft.ElevatedButton("SIM, APAGAR TUDO", bgcolor=ft.Colors.RED, color=ft.Colors.WHITE, on_click=self._delete_profile_confirmed)
+                ft.ElevatedButton("SIM, APAGAR TUDO", bgcolor=ft.Colors.RED, color=ft.Colors.WHITE,
+                                  on_click=lambda _: self.page.run_task(self._execute_delete))
             ],
             actions_alignment=ft.MainAxisAlignment.END
         )
@@ -200,7 +201,7 @@ class QGProfileSheetManager:
         self.confirm_delete_dialog.open = False
         self.page.update()
 
-    async def _delete_profile_confirmed(self, e):
+    async def _execute_delete(self):
         # [ATUALIZADO] Fecha dialogs via propriedade e update
         self.confirm_delete_dialog.open = False
         self.bottom_sheet.open = False
