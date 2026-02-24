@@ -1,9 +1,3 @@
-# ARQUIVO: src/main.py
-# CHANGE LOG:
-# - Implementado `view=None` na raiz do ft.run para impedir o Flet de abrir URLs estranhas.
-# - Roteamento web embutido em background para garantir que abra EXATAMENTE o localhost:8000.
-# - Atualização obrigatória para ft.run (encerra o DeprecationWarning no terminal).
-
 import logging
 import os
 import threading
@@ -59,10 +53,12 @@ async def main(page: ft.Page):
     await router.route_change(initial_route) 
     await page.push_route(initial_route)
 
-def open_browser_delayed(url):
-    """Espera o servidor subir por 2 segundos e abre a aba perfeita e limpa no navegador."""
-    time.sleep(2)
-    webbrowser.open(url)
+
+def open_browser():
+    """Abre o navegador perfeitamente no Localhost, não no 0.0.0.0"""
+    time.sleep(1.5)
+    webbrowser.open(f"http://localhost:{PORTA}")
+
 
 if __name__ == "__main__":
     is_docker = os.path.exists("/.dockerenv") or os.environ.get("ENVIRONMENT") == "production"
@@ -76,17 +72,17 @@ if __name__ == "__main__":
         print(f"📡 MODO TESTE LOCAL (Wi-Fi Pronto)")
         print(f"💻 ACESSO LOCAL (Neste PC):   http://localhost:{PORTA}")
         print(f"📱 ACESSO PELO CELULAR:       http://{MEU_IP}:{PORTA}")
-        
-        # Dispara a abertura do navegador de forma forçada no IP correto e não no 0.0.0.0
-        threading.Thread(target=open_browser_delayed, args=(f"http://localhost:{PORTA}",), daemon=True).start()
+        # Dispara thread para abrir no navegador local sem bugar
+        threading.Thread(target=open_browser, daemon=True).start()
     print("="*60 + "\n")
     
-    # ATENÇÃO: O Flet >= 0.81.0 precisa usar ft.run(). Usar ft.app causa crashes silenciosos e websocket timeout.
+    # ATENÇÃO: Substituído ft.app() que gera Warning por ft.run()
+    # view=None impede o Flet de tentar abrir "http://0.0.0.0" sozinho
     ft.run(
         target=main, 
         assets_dir=ASSETS_DIR,
         upload_dir=UPLOAD_ABS_PATH,
         port=PORTA,
-        host="0.0.0.0",  # Precisa escutar em 0.0.0.0 para o celular conseguir conectar
-        view=None        # Bloqueia o navegador de abrir na url 0.0.0.0 (a Thread ali em cima faz esse trabalho por nós)
+        host="0.0.0.0",
+        view=None 
     )

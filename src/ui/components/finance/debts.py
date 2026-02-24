@@ -1,8 +1,3 @@
-# ARQUIVO: src/ui/components/finance/debts.py
-# CHANGE LOG:
-# - Abortagem agressiva (early return) se a página já foi destruída na navegação.
-# - Proteção em todos os updates assíncronos.
-
 import flet as ft
 from src.logic.finance_service import FinanceService
 
@@ -30,21 +25,22 @@ class DebtManager:
             ]
         )
 
-    def _is_active(self):
-        """Verifica de forma segura se o componente ainda existe na tela."""
-        return bool(self.container.page and self.debt_carousel.page)
-
     def _get_profile_name(self, uid):
         return next((p["name"] for p in self.profiles if str(p["id"]) == str(uid)), "Desconhecido")
 
+    def safe_update(self, control):
+        """Atualiza a UI silenciosamente. Evita travamentos caso você já tenha mudado de aba."""
+        try:
+            if control.page:
+                control.update()
+        except Exception:
+            pass
+
     async def render_carousel(self):
-        if not self._is_active(): return
-        
         try:
             contacts = await FinanceService.get_debt_contacts(self.user["id"])
-            if not self._is_active(): return # Dupla checagem após await (A rota pode ter mudado durante a API)
-
-            self.debt_carousel.controls = []
+            
+            self.debt_carousel.controls.clear()
             if not contacts:
                 self.debt_carousel.controls.append(ft.Container(content=ft.Text("Nenhuma pendência.", color=ft.Colors.GREY_600), padding=20))
             else:
@@ -52,14 +48,16 @@ class DebtManager:
                     c['name'] = self._get_profile_name(c.get("id"))
                     self.debt_carousel.controls.append(self._build_contact_card(c))
 
-            if self._is_active():
-                self.debt_carousel.update()
-                if self.selected_contact_id: await self._refresh_history()
+            self.safe_update(self.debt_carousel)
+                
+            if self.selected_contact_id: 
+                await self._refresh_history()
+                
         except Exception as e:
-            pass
+            if "must be added" not in str(e):
+                print(f"Erro em render_carousel: {e}")
 
     async def _refresh_history(self):
-        if not self._is_active(): return
         c_name = self._get_profile_name(self.selected_contact_id)
         await self._load_history(self.selected_contact_id, c_name)
 
@@ -73,7 +71,7 @@ class DebtManager:
         
         return ft.Container(
             opacity=1.0 if is_sel or self.selected_contact_id is None else 0.5,
-            on_click=lambda e: self.page.run_task(self._select_contact, uid, name) if self._is_active() else None,
+            on_click=lambda e: self.page.run_task(self._select_contact, uid, name),
             content=ft.Column([
                 ft.Container(width=60, height=60, border_radius=30, bgcolor=ft.Colors.GREY_900, border=ft.border.all(3 if is_sel else 2, ft.Colors.CYAN if is_sel else border), alignment=ft.Alignment(0,0), content=ft.Text(initials, size=18, weight="bold", color=ft.Colors.WHITE)),
                 ft.Text(name.split()[0], size=12, weight="bold"),
@@ -82,30 +80,28 @@ class DebtManager:
         )
 
     async def _select_contact(self, contact_id, contact_name):
-        if not self._is_active(): return
         self.selected_contact_id = contact_id
         await self.render_carousel() 
         await self._load_history(contact_id, contact_name)
 
     async def _load_history(self, contact_id, contact_name):
-        if not self._is_active(): return
-        
         self.debt_detail_title.value = f"Extrato com {contact_name}"
-        try:
-            self.debt_detail_title.update()
-        except: pass
-        
+        self.safe_update(self.debt_detail_title)
+            
         try:
             history = await FinanceService.get_pairwise_history(self.user["id"], contact_id)
-            if not self._is_active(): return
-
-            self.debt_detail_list.controls = []
-            if not history: self.debt_detail_list.controls.append(ft.Text("Vazio.", italic=True))
-            for item in history: self.debt_detail_list.controls.append(self._build_history_card(item))
             
-            if self._is_active(): 
-                self.debt_detail_list.update()
-        except Exception: pass
+            self.debt_detail_list.controls.clear()
+            if not history: 
+                self.debt_detail_list.controls.append(ft.Text("Vazio.", italic=True))
+            for item in history: 
+                self.debt_detail_list.controls.append(self._build_history_card(item))
+            
+            self.safe_update(self.debt_detail_list)
+            
+        except Exception as e:
+            if "must be added" not in str(e):
+                print(f"Erro em load_history: {e}")
 
     def _build_history_card(self, item):
         is_credit = item.get("type") == "credit"
@@ -122,11 +118,11 @@ class DebtManager:
 
         if tx_id:
             if is_credit: 
-                actions.append(ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=ft.Colors.GREY_600, tooltip="Apagar", icon_size=20, on_click=lambda e: self.page.run_task(self._delete, tx_id) if self._is_active() else None))
+                actions.append(ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=ft.Colors.GREY_600, tooltip="Apagar", icon_size=20, on_click=lambda e: self.page.run_task(self._delete, tx_id)))
             else:
                 icon = ft.Icons.FLAG if my_id in contested else ft.Icons.FLAG_OUTLINED
                 col = ft.Colors.ORANGE if my_id in contested else ft.Colors.GREY_600
-                actions.append(ft.IconButton(icon, icon_color=col, tooltip="Sinalizar", icon_size=20, on_click=lambda e: self.page.run_task(self._contest, tx_id) if self._is_active() else None))
+                actions.append(ft.IconButton(icon, icon_color=col, tooltip="Sinalizar", icon_size=20, on_click=lambda e: self.page.run_task(self._contest, tx_id)))
 
         return ft.Container(
             bgcolor=ft.Colors.GREY_900, 
