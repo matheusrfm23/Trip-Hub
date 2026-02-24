@@ -33,6 +33,7 @@ class QGProfileSheetManager:
         )
 
     def cleanup(self):
+        # Limpeza segura do overlay
         if self.bottom_sheet in self.page.overlay:
             self.page.overlay.remove(self.bottom_sheet)
         if self.confirm_delete_dialog in self.page.overlay:
@@ -45,7 +46,8 @@ class QGProfileSheetManager:
             self.sheet_content.update()
 
     def _on_sheet_dismiss(self, e):
-        setattr(self.bottom_sheet, 'open', False)
+        # Se for fechado via clique fora, garante que o estado de open reflita
+        self.bottom_sheet.open = False
         self.is_chat_active = False 
         self.page.update()
 
@@ -156,13 +158,13 @@ class QGProfileSheetManager:
         delete_section = ft.Container()
         if is_me:
             delete_section = ft.Container(
-                margin=ft.margin.only(top=30),
+                margin=ft.margin.only(top=30, bottom=20),
                 alignment=ft.Alignment(0, 0),
                 content=ft.TextButton(
-                    "Excluir Conta",
+                    "Excluir Conta Permanentemente",
                     icon=ft.Icons.DELETE_FOREVER,
                     icon_color=ft.Colors.RED,
-                    style=ft.ButtonStyle(color=ft.Colors.RED),
+                    style=ft.ButtonStyle(color=ft.Colors.RED, overlay_color=ft.Colors.RED_900),
                     on_click=self._confirm_delete_profile
                 )
             )
@@ -185,12 +187,13 @@ class QGProfileSheetManager:
         
         self.sheet_content.height = 850 
         
+        # [REGRAS DE OURO] Append ao overlay
         if self.bottom_sheet not in self.page.overlay: self.page.overlay.append(self.bottom_sheet)
         self.bottom_sheet.open = True
         self.page.update()
 
     def _confirm_delete_profile(self, e):
-        # [CORREÇÃO] Garante uso de overlay.append
+        # [REGRAS DE OURO] Append ao overlay
         if self.confirm_delete_dialog not in self.page.overlay:
             self.page.overlay.append(self.confirm_delete_dialog)
         self.confirm_delete_dialog.open = True
@@ -201,7 +204,6 @@ class QGProfileSheetManager:
         self.page.update()
 
     async def _delete_profile_confirmed(self, e):
-        # [ATUALIZADO] Fecha dialogs via propriedade e update
         self.confirm_delete_dialog.open = False
         self.bottom_sheet.open = False
         self.page.update()
@@ -217,14 +219,12 @@ class QGProfileSheetManager:
 
         # Redireciona para login e limpa
         self.page.views.clear()
-        # [ATUALIZADO] Usa push_route e await
         await self.page.push_route("/login")
 
     def _navigate_to_chat(self, target_profile):
         self.page.run_task(ChatService.mark_conversation_as_read, self.user["id"], target_profile["id"])
         self.is_chat_active = True 
         
-        # Ajusta altura inicial para ocupar a tela toda
         current_h = self.page.height if self.page.height else 800
         self.sheet_content.height = current_h - 10 
         

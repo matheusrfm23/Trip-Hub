@@ -1,1 +1,8 @@
 2026-02-24 02:18:58 | INFO     | PlaceService    | Local adicionado: Place (3c2df830-32c2-4caf-b7b3-a51beaec0754)
+2026-02-24 03:28:27 | INFO     | PlaceService    | Local adicionado: Hotel Test (b4cd5449-a7cf-4a09-9116-0b3a977d18ce)
+2026-02-24 03:28:27 | INFO     | PlaceService    | Local atualizado: b4cd5449-a7cf-4a09-9116-0b3a977d18ce
+2026-02-24 03:28:27 | INFO     | PlaceService    | Local removido: b4cd5449-a7cf-4a09-9116-0b3a977d18ce
+2026-02-24 03:29:15 | ERROR    | PlaceService    | Erro ao adicionar local: no such table: places
+2026-02-24 03:29:15 | ERROR    | PlaceService    | Erro ao buscar locais (br/hotel): no such table: places
+2026-02-24 03:29:36 | INFO     | PlaceService    | Local adicionado: Hotel Extra (7fe5746c-4487-44ac-b5bd-07ec4ccb95a0)
+2026-02-24 03:29:36 | INFO     | PlaceService    | Local atualizado: 7fe5746c-4487-44ac-b5bd-07ec4ccb95a0

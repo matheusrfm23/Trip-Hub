@@ -14,27 +14,44 @@ class PlaceService:
         if not row: return None
         data = dict(row)
         
-        # 1. Processa JSON fields
+        # 1. Processa JSON fields (Votes)
         votes = []
         if data.get("votes"):
-            try: votes = json.loads(data["votes"])
-            except: pass
+            try:
+                votes_val = data["votes"]
+                if isinstance(votes_val, str):
+                    votes = json.loads(votes_val)
+                elif isinstance(votes_val, list):
+                    votes = votes_val
+            except Exception as e:
+                log.warning(f"Erro ao parsear votes (ID: {data.get('id')}): {e}")
         data["votes"] = votes
 
+        # 2. Processa JSON fields (Extra Data)
         extra_data = {}
         if data.get("extra_data"):
-            try: extra_data = json.loads(data["extra_data"])
-            except: pass
+            try:
+                extra_val = data["extra_data"]
+                if isinstance(extra_val, str) and extra_val.strip():
+                    extra_data = json.loads(extra_val)
+                elif isinstance(extra_val, dict):
+                    extra_data = extra_val
+            except Exception as e:
+                log.warning(f"Erro ao parsear extra_data (ID: {data.get('id')}): {e}")
 
-        # 2. Flatten extra_data into main dict (CORREÇÃO CRÍTICA)
+        # 3. Flatten extra_data into main dict (CORREÇÃO: Isso garante que 'price', 'wifi', etc estejam na raiz)
         if extra_data:
             data.update(extra_data)
 
-        # 3. Remove raw JSON columns to clean up
+        # 4. Remove raw JSON columns to clean up
         if "extra_data" in data: del data["extra_data"]
 
         # Boolean conversion
         data["visited"] = bool(data.get("visited", 0))
+
+        # Garantia de campos que podem vir do extra mas devem ter valor default
+        if "price" not in data: data["price"] = 0
+
         return data
 
     @staticmethod
@@ -64,8 +81,10 @@ class PlaceService:
             votes = json.dumps([], ensure_ascii=False)
 
             # Separa campos fixos de extra_data
-            fixed_cols = ["country", "category", "name", "description", "lat", "lon", "maps_link", "added_by"]
-            extra = {k: v for k, v in data.items() if k not in fixed_cols and k != "id"}
+            fixed_cols = ["country", "category", "name", "description", "lat", "lon", "maps_link", "added_by", "id"]
+
+            # Tudo que NÃO for coluna fixa vai para o extra_data JSON
+            extra = {k: v for k, v in data.items() if k not in fixed_cols}
             extra_data_json = json.dumps(extra, ensure_ascii=False)
             
             cursor = conn.cursor()
@@ -106,7 +125,7 @@ class PlaceService:
                 try: current_extra = json.loads(row["extra_data"])
                 except: pass
 
-            # Campos fixos
+            # Campos fixos que existem na tabela
             allowed_cols = ["name", "description", "lat", "lon", "maps_link", "visited"]
             set_clauses = []
             values = []
@@ -118,9 +137,14 @@ class PlaceService:
                     else: values.append(value)
 
             # Merge extra_data
+            # Se a chave NÃO está nas colunas fixas e NÃO é id, vai pro JSON
             new_extra = {k: v for k, v in updated_data.items() if k not in allowed_cols and k != "id"}
+
             if new_extra:
                 current_extra.update(new_extra)
+                # Remove chaves com valor None para limpar
+                current_extra = {k: v for k, v in current_extra.items() if v is not None}
+
                 set_clauses.append("extra_data = ?")
                 values.append(json.dumps(current_extra, ensure_ascii=False))
 
@@ -178,8 +202,8 @@ class PlaceService:
                 try: votes = json.loads(row["votes"])
                 except: pass
 
-            if user_id in votes: votes.remove(user_id)
-            else: votes.append(user_id)
+            if str(user_id) in votes: votes.remove(str(user_id))
+            else: votes.append(str(user_id))
 
             new_votes_json = json.dumps(votes, ensure_ascii=False)
             cursor.execute("UPDATE places SET votes = ? WHERE id = ?", (new_votes_json, place_id))

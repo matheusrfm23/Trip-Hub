@@ -19,7 +19,7 @@ class QGContent(ft.Column):
         self.profile_manager = QGProfileSheetManager(self.main_page, self.user, self.status_manager)
         
         # --- UI COMPONENTS ---
-        self.header = QGHeader(self.user, self.profile_manager.open_profile)
+        self.header = QGHeader(self.main_page, self.user, self.profile_manager.open_profile)
         self.banner = SmartBanner(self.main_page, self.user)
         self.radar = QGRadar(self.main_page, self.user, self.profile_manager.open_profile)
         self.countries = QGCountries(self.navigate_to_country)
