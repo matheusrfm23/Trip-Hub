@@ -85,7 +85,7 @@ class QGHeader(ft.Row):
             print(f"Erro badge: {e}")
 
     async def _open_notifications(self, e):
-        # [CORREÇÃO] Garante overlay e abre imediatamente
+        # [CORREÇÃO] Garante overlay e abre imediatamente (Padrão Clássico)
         if self.notifications_dialog not in self.page_ref.overlay:
             self.page_ref.overlay.append(self.notifications_dialog)
         self.notifications_dialog.open = True
@@ -94,6 +94,7 @@ class QGHeader(ft.Row):
         # Carrega lista em background
         content_col = self.notifications_dialog.content.content
         content_col.controls = [ft.ProgressRing()]
+        # Atualiza o dialog novamente para mostrar o loading
         self.notifications_dialog.update()
 
         # Busca dados

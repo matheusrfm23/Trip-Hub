@@ -31,7 +31,7 @@ class QGProfileSheetManager:
                     "SIM, APAGAR TUDO",
                     bgcolor=ft.Colors.RED,
                     color=ft.Colors.WHITE,
-                    on_click=lambda e: self.page.run_task(self._delete_task)
+                    on_click=self._execute_delete
                 )
             ],
             actions_alignment=ft.MainAxisAlignment.END
@@ -208,7 +208,8 @@ class QGProfileSheetManager:
         self.confirm_delete_dialog.open = False
         self.page.update()
 
-    async def _delete_task(self):
+    async def _execute_delete(self, e):
+        # Fecha dialogs
         self.confirm_delete_dialog.open = False
         self.bottom_sheet.open = False
         self.page.update()

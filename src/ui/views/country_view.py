@@ -37,8 +37,8 @@ class CountryView(ft.View):
         self.header = ft.Container(
             padding=ft.padding.only(left=5, right=10, top=10, bottom=15),
             gradient=ft.LinearGradient(
-                begin=ft.alignment.top_center,
-                end=ft.alignment.bottom_center,
+                begin=ft.Alignment(0, -1),
+                end=ft.Alignment(0, 1),
                 colors=[self.cfg["color"], ft.Colors.BLACK]
             ),
             content=ft.Column([
