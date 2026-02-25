@@ -1,3 +1,7 @@
+# ARQUIVO: log_manager.py
+# CHANGE LOG:
+# - Adicionado suporte à leitura e modificação da flag "show_polling_logs".
+
 #!/usr/bin/env python3
 import json
 import os
@@ -13,7 +17,8 @@ def load_config():
             "console_enabled": True,
             "file_enabled": True,
             "retention_days": 7,
-            "monitoring_level": "BASIC"
+            "monitoring_level": "BASIC",
+            "show_polling_logs": False
         }
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -33,15 +38,17 @@ def print_menu(config):
 
     console_status = "🟢 ON" if config.get("console_enabled") else "🔴 OFF"
     file_status = "🟢 ON" if config.get("file_enabled") else "🔴 OFF"
+    polling_status = "🟢 ON" if config.get("show_polling_logs") else "🔴 OFF (Silenciado)"
     retention = config.get("retention_days", 7)
     level = config.get("monitoring_level", "BASIC")
 
-    print(f"1. Alternar Console Logs  [{console_status}]")
-    print(f"2. Alternar Arquivo Logs  [{file_status}]")
-    print(f"3. Definir Retenção       [{retention} dias]")
-    print(f"4. Definir Nível Monitoramento [{level}]")
+    print(f"1. Alternar Console Logs    [{console_status}]")
+    print(f"2. Alternar Arquivo Logs    [{file_status}]")
+    print(f"3. Alternar Logs de Polling [{polling_status}]")
+    print(f"4. Definir Retenção         [{retention} dias]")
+    print(f"5. Definir Nível Monitoramento [{level}]")
     print(f"   (BASIC, FULL, ERROR_ONLY)")
-    print(f"5. 🗑️  LIMPAR TODOS OS LOGS")
+    print(f"6. 🗑️  LIMPAR TODOS OS LOGS")
     print(f"0. Sair")
     print("="*40)
 
@@ -64,22 +71,14 @@ def main():
     config = load_config()
 
     if len(sys.argv) > 1:
-        # Modo CLI Direto (Argumentos)
         cmd = sys.argv[1]
-        if cmd == "clear":
-            clear_logs()
-        elif cmd == "console-on":
-            config["console_enabled"] = True
-            save_config(config)
-        elif cmd == "console-off":
-            config["console_enabled"] = False
-            save_config(config)
-        elif cmd == "file-on":
-            config["file_enabled"] = True
-            save_config(config)
-        elif cmd == "file-off":
-            config["file_enabled"] = False
-            save_config(config)
+        if cmd == "clear": clear_logs()
+        elif cmd == "console-on": config["console_enabled"] = True; save_config(config)
+        elif cmd == "console-off": config["console_enabled"] = False; save_config(config)
+        elif cmd == "file-on": config["file_enabled"] = True; save_config(config)
+        elif cmd == "file-off": config["file_enabled"] = False; save_config(config)
+        elif cmd == "polling-on": config["show_polling_logs"] = True; save_config(config)
+        elif cmd == "polling-off": config["show_polling_logs"] = False; save_config(config)
         elif cmd.startswith("level="):
             lvl = cmd.split("=")[1].upper()
             if lvl in ["BASIC", "FULL", "ERROR_ONLY"]:
@@ -91,7 +90,6 @@ def main():
             print(f"Comando desconhecido: {cmd}")
         return
 
-    # Modo Interativo
     while True:
         print_menu(config)
         choice = input("Opção: ")
@@ -103,24 +101,24 @@ def main():
             config["file_enabled"] = not config.get("file_enabled", True)
             save_config(config)
         elif choice == "3":
+            config["show_polling_logs"] = not config.get("show_polling_logs", False)
+            save_config(config)
+        elif choice == "4":
             try:
                 days = int(input("Dias de retenção: "))
                 if days > 0:
                     config["retention_days"] = days
                     save_config(config)
             except: print("Valor inválido.")
-        elif choice == "4":
-            print("Escolha o nível:")
-            print("  BASIC: Logs padrão + Performance lenta")
-            print("  FULL: Logs detalhados + Argumentos + Todo tempo execução")
-            print("  ERROR_ONLY: Apenas erros críticos")
-            lvl = input("Nível (BASIC/FULL/ERROR_ONLY): ").upper()
+        elif choice == "5":
+            print("Escolha o nível: BASIC, FULL, ERROR_ONLY")
+            lvl = input("Nível: ").upper()
             if lvl in ["BASIC", "FULL", "ERROR_ONLY"]:
                 config["monitoring_level"] = lvl
                 save_config(config)
             else:
                 print("Nível inválido.")
-        elif choice == "5":
+        elif choice == "6":
             clear_logs()
         elif choice == "0":
             break

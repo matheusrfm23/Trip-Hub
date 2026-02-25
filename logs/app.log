@@ -17,3 +17,9 @@
 2026-02-24 19:39:22 | INFO     | AuthService     | Verificação Concluída. 3 perfis ativos.
 2026-02-24 19:39:22 | INFO     | TripHub.Main    | Definindo rota inicial para: /country/br
 2026-02-24 19:39:27 | INFO     | AuthService     | Login realizado com sucesso: RFM
+2026-02-24 21:54:21 | INFO     | TripHub.Main    | >>> STARTUP: Iniciando Trip Hub...
+2026-02-24 21:54:21 | INFO     | TripHub.Main    | Banco de dados conectado e inicializado.
+2026-02-24 21:54:21 | INFO     | AuthService     | Iniciando Verificação de Integridade dos Dados...
+2026-02-24 21:54:21 | INFO     | AuthService     | Verificação Concluída. 3 perfis ativos.
+2026-02-24 21:54:21 | INFO     | TripHub.Main    | Definindo rota inicial para: /login
+2026-02-24 21:54:30 | INFO     | AuthService     | Login realizado com sucesso: RFM

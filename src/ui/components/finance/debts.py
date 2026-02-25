@@ -1,3 +1,8 @@
+# ARQUIVO: src/ui/components/finance/debts.py
+# CHANGE LOG:
+# - Propriedade `is_mounted` avaliada antes e DEPOIS de todos os awaits.
+# - Exceptions de interface blindadas e prints causadores de lag de console removidos.
+
 import flet as ft
 from src.logic.finance_service import FinanceService
 
@@ -25,20 +30,25 @@ class DebtManager:
             ]
         )
 
+    @property
+    def is_mounted(self):
+        return getattr(self.container, "page", None) is not None
+
     def _get_profile_name(self, uid):
         return next((p["name"] for p in self.profiles if str(p["id"]) == str(uid)), "Desconhecido")
 
     def safe_update(self, control):
-        """Atualiza a UI silenciosamente. Evita travamentos caso você já tenha mudado de aba."""
-        try:
-            if control.page:
+        if self.is_mounted and getattr(control, "page", None):
+            try:
                 control.update()
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     async def render_carousel(self):
+        if not self.is_mounted: return
         try:
             contacts = await FinanceService.get_debt_contacts(self.user["id"])
+            if not self.is_mounted: return
             
             self.debt_carousel.controls.clear()
             if not contacts:
@@ -50,14 +60,14 @@ class DebtManager:
 
             self.safe_update(self.debt_carousel)
                 
-            if self.selected_contact_id: 
+            if self.selected_contact_id and self.is_mounted: 
                 await self._refresh_history()
                 
-        except Exception as e:
-            if "must be added" not in str(e):
-                print(f"Erro em render_carousel: {e}")
+        except Exception:
+            pass # Silencia log de render falho em background
 
     async def _refresh_history(self):
+        if not self.is_mounted: return
         c_name = self._get_profile_name(self.selected_contact_id)
         await self._load_history(self.selected_contact_id, c_name)
 
@@ -80,16 +90,20 @@ class DebtManager:
         )
 
     async def _select_contact(self, contact_id, contact_name):
+        if not self.is_mounted: return
         self.selected_contact_id = contact_id
         await self.render_carousel() 
         await self._load_history(contact_id, contact_name)
 
     async def _load_history(self, contact_id, contact_name):
+        if not self.is_mounted: return
+        
         self.debt_detail_title.value = f"Extrato com {contact_name}"
         self.safe_update(self.debt_detail_title)
             
         try:
             history = await FinanceService.get_pairwise_history(self.user["id"], contact_id)
+            if not self.is_mounted: return
             
             self.debt_detail_list.controls.clear()
             if not history: 
@@ -99,9 +113,8 @@ class DebtManager:
             
             self.safe_update(self.debt_detail_list)
             
-        except Exception as e:
-            if "must be added" not in str(e):
-                print(f"Erro em load_history: {e}")
+        except Exception:
+            pass # Silencia log de render falho em background
 
     def _build_history_card(self, item):
         is_credit = item.get("type") == "credit"
@@ -143,9 +156,11 @@ class DebtManager:
         )
 
     async def _delete(self, tx_id):
+        if not self.is_mounted: return
         await FinanceService.delete_expense(tx_id)
         await self.render_carousel() 
 
     async def _contest(self, tx_id):
+        if not self.is_mounted: return
         await FinanceService.toggle_contest(tx_id, self.user["id"])
         if self.selected_contact_id: await self._refresh_history()

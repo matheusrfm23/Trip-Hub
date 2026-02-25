@@ -1,8 +1,11 @@
+# ARQUIVO: src/main.py
+# CHANGE LOG:
+# - Restaurado view=ft.AppView.WEB_BROWSER para forçar a subida do Uvicorn (Web Server).
+# - O host no ambiente local agora é o MEU_IP para evitar o bug do "0.0.0.0" no Chrome.
+# - Removida a gambiarra de thread secundária (o Flet abre o IP sozinho agora).
+
 import logging
 import os
-import threading
-import webbrowser
-import time
 import flet as ft
 
 from src.core.logger import get_logger
@@ -54,35 +57,30 @@ async def main(page: ft.Page):
     await page.push_route(initial_route)
 
 
-def open_browser():
-    """Abre o navegador perfeitamente no Localhost, não no 0.0.0.0"""
-    time.sleep(1.5)
-    webbrowser.open(f"http://localhost:{PORTA}")
-
-
 if __name__ == "__main__":
     is_docker = os.path.exists("/.dockerenv") or os.environ.get("ENVIRONMENT") == "production"
 
     print("\n" + "="*60)
     print(f"🚀 TRIP HUB SERVER")
+    
     if is_docker:
+        host_ip = "0.0.0.0"
         print(f"📡 MODO PRODUÇÃO (Docker/Oracle)")
         print(f"🌐 SERVIDOR ATIVO EM: http://0.0.0.0:{PORTA}")
     else:
+        host_ip = MEU_IP
         print(f"📡 MODO TESTE LOCAL (Wi-Fi Pronto)")
-        print(f"💻 ACESSO LOCAL (Neste PC):   http://localhost:{PORTA}")
-        print(f"📱 ACESSO PELO CELULAR:       http://{MEU_IP}:{PORTA}")
-        # Dispara thread para abrir no navegador local sem bugar
-        threading.Thread(target=open_browser, daemon=True).start()
+        print(f"💻 ACESSO LOCAL (Navegador Aberto Automático): http://{MEU_IP}:{PORTA}")
+        print(f"📱 ACESSO PELO CELULAR: http://{MEU_IP}:{PORTA}")
+        
     print("="*60 + "\n")
     
-    # ATENÇÃO: Substituído ft.app() que gera Warning por ft.run()
-    # view=None impede o Flet de tentar abrir "http://0.0.0.0" sozinho
+    # ATENÇÃO: 'main' sem 'target=', conforme nova sintaxe do Flet 0.81
     ft.run(
-        target=main, 
+        main,
         assets_dir=ASSETS_DIR,
         upload_dir=UPLOAD_ABS_PATH,
         port=PORTA,
-        host="0.0.0.0",
-        view=None 
+        host=host_ip,
+        view=ft.AppView.WEB_BROWSER 
     )

@@ -1,7 +1,7 @@
 # ARQUIVO: src/logic/finance_service.py
 # CHANGE LOG:
-# - Implementado `time.time()` para Cache (TTL de 600s/10 min).
-# - O app agora não vai mais travar aguardando APIs repetidas a cada troca de aba.
+# - Implementado `asyncio.Lock()` para eliminar Race Conditions.
+# - Agora, se 10 abas pedirem câmbio ao mesmo tempo, 9 delas vão esperar a 1ª terminar e usar o cache instantaneamente.
 
 import json
 import asyncio
@@ -19,6 +19,7 @@ class FinanceService:
     # Controle de Cache da API para evitar bloqueio e lentidão no UI
     _last_rate_update = 0
     _CACHE_TTL = 600 # 10 minutos
+    _rate_lock = asyncio.Lock() # CADEADO PARA PREVENIR RACE CONDITION
     
     # Taxas padrão (Fallback seguro)
     RATES_DISPLAY = {
@@ -43,59 +44,66 @@ class FinanceService:
         if now - cls._last_rate_update < cls._CACHE_TTL:
             return True
             
-        logger.info("Iniciando atualização de câmbio (AwesomeAPI + Bluelytics)...")
-        
-        # Headers para evitar bloqueio (WAF)
-        headers = {
-            "User-Agent": "TripHub-App/1.0 (Linux; Docker)",
-            "Accept": "application/json"
-        }
-        
-        timeout = aiohttp.ClientTimeout(total=5) # Timeout reduzido para evitar lag na navegação
-        connector = aiohttp.TCPConnector(ssl=False)
-
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
-            # --- 1. AwesomeAPI (Dólar e Guarani) ---
-            try:
-                async with session.get(cls.API_AWESOME) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        if "USDBRL" in data:
-                            val_usd = float(data["USDBRL"]["bid"])
-                            cls.RATES_DISPLAY["USD"]["val"] = val_usd
-                            logger.info(f"✅ Dólar Oficial (Awesome): R$ {val_usd:.3f}")
-                        
-                        if "BRLPYG" in data:
-                            guaranis_per_real = float(data["BRLPYG"]["bid"])
-                            if guaranis_per_real > 0:
-                                cls.RATES_DISPLAY["PYG"]["val"] = 1.0 / guaranis_per_real
-                                logger.info(f"✅ Guarani (Awesome): 1 BRL = {guaranis_per_real:.0f} PYG")
-                    else:
-                        logger.warning(f"⚠️ AwesomeAPI retornou erro: {response.status}")
-            
-            except asyncio.TimeoutError:
-                logger.warning("⏳ Timeout na AwesomeAPI (Usando valores locais).")
-            except Exception as e:
-                logger.error(f"❌ Erro na AwesomeAPI: {e}")
-
-            # --- 2. Bluelytics (Peso Blue Argentina) ---
-            try:
-                async with session.get(cls.API_BLUE) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        blue_sell = data["blue"]["value_sell"]
-                        if blue_sell > 0:
-                            usd_val = cls.RATES_DISPLAY["USD"]["val"]
-                            val_peso_em_reais = usd_val / blue_sell
-                            cls.RATES_DISPLAY["ARS"]["val"] = val_peso_em_reais
-                            logger.info(f"✅ Peso Blue Atualizado: 1 USD = ${blue_sell:.0f} ARS")
-            except Exception as e: 
-                logger.error(f"❌ Erro no Bluelytics: {e}")
+        # O Cadeado garante que apenas 1 requisição ocorra mesmo se o usuário floodar a navegação
+        async with cls._rate_lock:
+            now = time.time()
+            # Double check dentro do cadeado
+            if now - cls._last_rate_update < cls._CACHE_TTL:
+                return True
                 
-        # Só atualiza a marca de tempo se não houve uma falha catastrófica geral
-        cls._last_rate_update = time.time()
-        return True
+            logger.info("Iniciando atualização de câmbio (AwesomeAPI + Bluelytics)...")
+            
+            # Headers para evitar bloqueio (WAF)
+            headers = {
+                "User-Agent": "TripHub-App/1.0 (Linux; Docker)",
+                "Accept": "application/json"
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=5) # Timeout reduzido para evitar lag na navegação
+            connector = aiohttp.TCPConnector(ssl=False)
+
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
+                # --- 1. AwesomeAPI (Dólar e Guarani) ---
+                try:
+                    async with session.get(cls.API_AWESOME) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            
+                            if "USDBRL" in data:
+                                val_usd = float(data["USDBRL"]["bid"])
+                                cls.RATES_DISPLAY["USD"]["val"] = val_usd
+                                logger.info(f"✅ Dólar Oficial (Awesome): R$ {val_usd:.3f}")
+                            
+                            if "BRLPYG" in data:
+                                guaranis_per_real = float(data["BRLPYG"]["bid"])
+                                if guaranis_per_real > 0:
+                                    cls.RATES_DISPLAY["PYG"]["val"] = 1.0 / guaranis_per_real
+                                    logger.info(f"✅ Guarani (Awesome): 1 BRL = {guaranis_per_real:.0f} PYG")
+                        else:
+                            logger.warning(f"⚠️ AwesomeAPI retornou erro: {response.status}")
+                
+                except asyncio.TimeoutError:
+                    logger.warning("⏳ Timeout na AwesomeAPI (Usando valores locais).")
+                except Exception as e:
+                    logger.error(f"❌ Erro na AwesomeAPI: {e}")
+
+                # --- 2. Bluelytics (Peso Blue Argentina) ---
+                try:
+                    async with session.get(cls.API_BLUE) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            blue_sell = data["blue"]["value_sell"]
+                            if blue_sell > 0:
+                                usd_val = cls.RATES_DISPLAY["USD"]["val"]
+                                val_peso_em_reais = usd_val / blue_sell
+                                cls.RATES_DISPLAY["ARS"]["val"] = val_peso_em_reais
+                                logger.info(f"✅ Peso Blue Atualizado: 1 USD = ${blue_sell:.0f} ARS")
+                except Exception as e: 
+                    logger.error(f"❌ Erro no Bluelytics: {e}")
+                    
+            # Só atualiza a marca de tempo se não houve uma falha catastrófica geral
+            cls._last_rate_update = time.time()
+            return True
 
     @staticmethod
     def convert_value(amount, from_curr, to_curr):
