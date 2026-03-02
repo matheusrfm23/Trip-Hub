@@ -158,7 +158,7 @@ class TravelerContent(ft.Column):
             self.main_page.update()
 
     def _setup_delete_dialog(self):
-        self.master_input = ft.TextField(label="Senha Mestra (1995)", password=True, text_align="center", height=40)
+        self.master_input = ft.TextField(label="Senha Mestra", password=True, text_align="center", height=40)
         self.delete_dialog = ft.AlertDialog(
             title=ft.Text("Excluir Conta?", color=ft.Colors.RED, size=16),
             content=ft.Container(height=70, content=ft.Column([
