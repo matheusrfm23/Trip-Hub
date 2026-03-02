@@ -2,6 +2,9 @@
 import json
 import os
 from src.core.locker import file_lock  # <--- IMPORTANTE: O Cadeado
+from src.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ChecklistService:
     FILE_PATH = "assets/data/checklists.json"
@@ -23,7 +26,16 @@ class ChecklistService:
             with open(ChecklistService.FILE_PATH, "r") as f:
                 data = json.load(f)
             return data.get(str(user_id), [])
-        except:
+        except FileNotFoundError:
+            return []
+        except json.JSONDecodeError as e:
+            logger.critical(f"Arquivo de checklist corrompido: {e}")
+            return []
+        except OSError as e:
+            logger.error(f"Erro de sistema ao ler checklist: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Erro inesperado ao ler checklist: {e}")
             return []
 
     @staticmethod
@@ -45,7 +57,7 @@ class ChecklistService:
                     json.dump(data, f, indent=4)
             return True
         except Exception as e:
-            print(f"Erro ao salvar checklist: {e}")
+            logger.exception(f"Erro ao salvar checklist: {e}")
             return False
 
     @staticmethod
