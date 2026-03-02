@@ -18,15 +18,4 @@ class ContentFactory:
         :param category: 'hotel', 'food', 'tour', 'shop'
         """
         
-        # --- FUTURO: HOOKS DE CUSTOMIZAÇÃO ---
-        # Aqui é onde você inserirá a lógica do Paraguai futuramente.
-        # Exemplo hipotético:
-        # if country_code == 'py' and category == 'shop':
-        #     return ParaguayShoppingTab(page)
-        
-        # --- COMPORTAMENTO PADRÃO ---
-        # Para todos os casos onde não há customização, usamos o PlaceTab genérico.
-        # Mapeamento de categorias de string simples para chaves internas se necessário,
-        # mas atualmente o sistema usa 'hotel', 'food', 'tour', 'shop' diretamente.
-        
         return PlaceTab(page, country_code, category)
