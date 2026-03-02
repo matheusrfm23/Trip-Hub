@@ -37,6 +37,9 @@ MEU_IP = get_lan_ip()
 # [CORREÇÃO] Porta unificada. Se mudar aqui, muda no servidor inteiro.
 PORTA = int(os.getenv("PORT", 8080)) 
 
+# API Keys
+ORS_API_KEY = os.getenv("ORS_API_KEY")
+
 # ==============================================================================
 # 3. INFRAESTRUTURA DE ARQUIVOS
 # ==============================================================================
