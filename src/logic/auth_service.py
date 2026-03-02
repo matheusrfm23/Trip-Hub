@@ -20,9 +20,8 @@ class AuthService:
     MASTER_PIN = os.getenv("MASTER_PIN", "0000")
 
     # --- CAMADA DE CACHE (RAM) ---
-    # Armazena a lista pura para iterações
-    _cache_profiles = None 
     # Armazena um mapa {id: profile} para acesso O(1) imediato
+    # Esta é a ÚNICA fonte de verdade na RAM
     _cache_map = None
     # -----------------------------
 
@@ -62,18 +61,16 @@ class AuthService:
         try:
             with open(cls.FILE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                cls._cache_profiles = data
-                # Reconstrói o mapa de acesso rápido
+                # Constrói o mapa de acesso rápido como Single Source of Truth
                 cls._cache_map = {str(p["id"]): p for p in data}
         except Exception as e:
             log.error(f"Erro ao carregar cache do disco: {e}")
-            cls._cache_profiles = []
             cls._cache_map = {}
 
     @classmethod
     def _ensure_cache(cls):
         """Lazy loader para o cache."""
-        if cls._cache_profiles is None:
+        if cls._cache_map is None:
             cls._refresh_cache()
 
     @classmethod
@@ -95,9 +92,9 @@ class AuthService:
 
     @classmethod
     async def get_profiles(cls):
-        """Retorna todos os perfis (Leitura de RAM)."""
+        """Retorna todos os perfis (Leitura de RAM, gerada dinamicamente)."""
         cls._ensure_cache()
-        return cls._cache_profiles
+        return list(cls._cache_map.values())
 
     @classmethod
     async def get_user_by_id(cls, user_id):
@@ -129,7 +126,7 @@ class AuthService:
             log.info(f"Tentando criar perfil: {name}")
             cls._ensure_cache()
             
-            role = "ADMIN" if len(cls._cache_profiles) == 0 else "USER"
+            role = "ADMIN" if len(cls._cache_map) == 0 else "USER"
 
             new_user = {
                 "id": str(uuid.uuid4()),
@@ -149,13 +146,12 @@ class AuthService:
             }
             
             # 1. Atualiza RAM (Write-Through)
-            cls._cache_profiles.append(new_user)
             cls._cache_map[new_user["id"]] = new_user
             
             # 2. Persiste no Disco
             with file_lock():
                 with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
+                    json.dump(list(cls._cache_map.values()), f, indent=4, ensure_ascii=False)
             
             log.info(f"Perfil criado: {name} ({new_user['id']})")
             return True
@@ -177,7 +173,7 @@ class AuthService:
                 # 2. Persiste lista completa no disco
                 with file_lock():
                     with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
+                        json.dump(list(cls._cache_map.values()), f, indent=4, ensure_ascii=False)
                         
                 log.info(f"Perfil atualizado: {profile_id}")
                 return True
@@ -209,7 +205,7 @@ class AuthService:
                 # Mantivemos para garantir estado entre reboots, mas com lock seguro.
                 with file_lock():
                     with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
+                        json.dump(list(cls._cache_map.values()), f, indent=4, ensure_ascii=False)
                 
                 return True
             return False
@@ -223,15 +219,22 @@ class AuthService:
             log.warning(f"Solicitação de exclusão de perfil: {profile_id}")
             cls._ensure_cache()
             
-            # Filtra na RAM
-            cls._cache_profiles = [p for p in cls._cache_profiles if str(p["id"]) != str(profile_id)]
-            # Reconstrói Mapa RAM
-            cls._cache_map = {str(p["id"]): p for p in cls._cache_profiles}
+            # Remove from RAM (O(1))
+            deleted_user = cls._cache_map.pop(str(profile_id), None)
+
+            if not deleted_user:
+                log.warning(f"Perfil {profile_id} não encontrado para exclusão.")
+                return False
+
+            # Verifica se o perfil excluído é o logado no momento
+            logged_in_id = cls.get_cached_login()
+            if logged_in_id and str(logged_in_id) == str(profile_id):
+                cls.clear_cached_login()
             
             # Persiste Disco
             with file_lock():
                 with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(cls._cache_profiles, f, indent=4, ensure_ascii=False)
+                    json.dump(list(cls._cache_map.values()), f, indent=4, ensure_ascii=False)
             
             # Limpeza de dados órfãos
             await cls.perform_integrity_check()
