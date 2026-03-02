@@ -1,5 +1,7 @@
 import flet as ft
+
 from src.core.utils import get_file_details
+
 
 class ModalPreview:
     def __init__(self, page: ft.Page):
