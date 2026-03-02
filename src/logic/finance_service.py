@@ -6,6 +6,7 @@ import logging
 import aiohttp 
 from datetime import datetime
 from src.data.database import Database
+from src.core.config import SSL_VERIFY
 
 logger = logging.getLogger("TripHub.Finance")
 
@@ -38,8 +39,12 @@ class FinanceService:
         }
         
         timeout = aiohttp.ClientTimeout(total=10)
-        # ssl=False mantido para compatibilidade máxima no Docker dev
-        connector = aiohttp.TCPConnector(ssl=False)
+
+        # Loga um alerta severo se a verificação SSL estiver desativada
+        if not SSL_VERIFY:
+            logger.warning("🚨 ALERTA DE SEGURANÇA: Verificação SSL está desativada (SSL_VERIFY=False). Use isso apenas no ambiente Docker/Dev local!")
+
+        connector = aiohttp.TCPConnector(ssl=SSL_VERIFY)
 
         async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
             # --- 1. AwesomeAPI (Dólar e Guarani) ---
