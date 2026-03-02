@@ -121,26 +121,43 @@ class FinanceService:
         try:
             cursor.execute("SELECT * FROM expenses")
             rows = cursor.fetchall()
-            changes = 0
+
+            to_delete = []
+            to_update = []
+
             for row in rows:
                 tx_id = row["id"]
                 payer_id = str(row["payer_id"])
+
                 if payer_id not in valid_user_ids:
-                    cursor.execute("DELETE FROM expenses WHERE id=?", (tx_id,))
-                    changes += 1
+                    to_delete.append((tx_id,))
                     continue
+
                 raw_involved = row["involved_ids"]
                 involved = json.loads(raw_involved) if raw_involved else []
                 new_involved = [uid for uid in involved if str(uid) in valid_user_ids]
+
                 raw_contested = row["contested_by"]
                 contested = json.loads(raw_contested) if raw_contested else []
                 new_contested = [uid for uid in contested if str(uid) in valid_user_ids]
+
                 if len(involved) != len(new_involved) or len(contested) != len(new_contested):
-                    cursor.execute(
-                        "UPDATE expenses SET involved_ids=?, contested_by=? WHERE id=?", 
-                        (json.dumps(new_involved), json.dumps(new_contested), tx_id)
-                    )
-                    changes += 1
+                    to_update.append((
+                        json.dumps(new_involved),
+                        json.dumps(new_contested),
+                        tx_id
+                    ))
+
+            changes = len(to_delete) + len(to_update)
+
+            if to_delete:
+                cursor.executemany("DELETE FROM expenses WHERE id=?", to_delete)
+            if to_update:
+                cursor.executemany(
+                    "UPDATE expenses SET involved_ids=?, contested_by=? WHERE id=?",
+                    to_update
+                )
+
             conn.commit()
             if changes > 0:
                 logger.info(f"Limpeza financeira: {changes} registros ajustados.")
