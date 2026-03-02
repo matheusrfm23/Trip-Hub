@@ -3,6 +3,9 @@ import asyncio
 import time
 from datetime import datetime
 from src.logic.chat_service import ChatService
+from src.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ChatContent(ft.Container):
     def __init__(self, page: ft.Page, current_user, target_user, on_back):
@@ -80,8 +83,10 @@ class ChatContent(ft.Container):
         self.page_ref.run_task(self._safe_focus)
 
     async def _safe_focus(self):
-        try: await self.tf_input.focus() 
-        except: pass
+        try:
+            await self.tf_input.focus()
+        except Exception as e:
+            logger.warning(f"Failed to focus input field: {e}")
 
     def will_unmount(self):
         print("Chat desmontado.")
@@ -124,7 +129,9 @@ class ChatContent(ft.Container):
         try:
             dt = datetime.fromtimestamp(float(msg["timestamp"]))
             time_str = dt.strftime("%H:%M")
-        except: time_str = "--:--"
+        except (ValueError, TypeError, OSError) as e:
+            logger.warning(f"Failed to parse timestamp {msg.get('timestamp')}: {e}")
+            time_str = "--:--"
 
         return ft.Row(
             alignment=ft.MainAxisAlignment.END if is_me else ft.MainAxisAlignment.START,
