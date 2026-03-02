@@ -264,7 +264,13 @@ class AuthService:
             with open(cls.CACHE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("last_user_id")
-        except:
+        except FileNotFoundError:
+            return None
+        except json.JSONDecodeError as e:
+            log.warning(f"Erro ao decodificar cache de login: {e}")
+            return None
+        except Exception as e:
+            log.exception(f"Erro inesperado ao obter cache de login: {e}")
             return None
 
     @classmethod
@@ -273,4 +279,7 @@ class AuthService:
             try:
                 with file_lock():
                     os.remove(cls.CACHE_PATH)
-            except: pass
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                log.error(f"Erro ao remover cache de login: {e}")
