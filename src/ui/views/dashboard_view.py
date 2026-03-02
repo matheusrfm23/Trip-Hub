@@ -12,6 +12,7 @@ from src.ui.components.utilities.quick_access import QuickAccessButton
 from src.logic.finance_service import FinanceService
 from src.logic.auth_service import AuthService
 from src.logic.notification_service import NotificationService 
+from src.core.logger import logger
 
 class DashboardView(ft.View):
     def __init__(self, page: ft.Page):
@@ -112,7 +113,13 @@ class DashboardView(ft.View):
             else:
                 self.badge_container.visible = False
             self.badge_container.update()
-        except: pass
+        except Exception as e:
+            logger.error(f"Erro ao atualizar badge de notificações: {e}")
+            try:
+                self.badge_container.visible = False
+                self.badge_container.update()
+            except Exception:
+                pass
 
     # --- CENTRAL DE NOTIFICAÇÕES ---
     def _setup_notification_dialog(self):
