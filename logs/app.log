@@ -1,0 +1,8 @@
+2026-03-02 20:45:32,545 | WARNING  | AuthService | Solicitação de exclusão de perfil: 10
+2026-03-02 20:45:32,545 | INFO     | AuthService | Perfil excluído com sucesso: 10
+2026-03-02 20:45:32,685 | WARNING  | AuthService | Solicitação de exclusão de perfil: 50000
+2026-03-02 20:45:33,328 | INFO     | AuthService | Perfil excluído com sucesso: 50000
+2026-03-02 20:46:47,694 | WARNING  | AuthService | Solicitação de exclusão de perfil: 10
+2026-03-02 20:46:47,694 | INFO     | AuthService | Perfil excluído com sucesso: 10
+2026-03-02 20:46:47,828 | WARNING  | AuthService | Solicitação de exclusão de perfil: 50000
+2026-03-02 20:46:48,416 | INFO     | AuthService | Perfil excluído com sucesso: 50000
