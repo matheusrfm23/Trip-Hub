@@ -4,7 +4,7 @@ import time
 import asyncio
 import aiohttp
 from datetime import datetime, timedelta
-from src.core.config import ASSETS_DIR
+from src.core.config import ASSETS_DIR, ORS_API_KEY
 from src.core.locker import file_lock
 from src.core.logger import get_logger
 
@@ -14,9 +14,6 @@ class BannerService:
     CONFIG_FILE = os.path.join(ASSETS_DIR, "data", "banner_config.json")
     SCHEDULE_FILE = os.path.join(ASSETS_DIR, "data", "schedule.json")
     
-    # SUA CHAVE EXATA (Sem decodificar)
-    ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImEwNjFjNmNhZmJiNTQ5OTI5Y2UwNmU2MzdjOTY2MGFjIiwiaCI6Im11cm11cjY0In0="
-
     _mem_cache = {
         "finance": {"ts": 0, "data": {"usd": 5.0, "eur": 6.0, "ars": 0.005, "blue": 1000.0, "pyg": 1400.0}},
         "weather": {
@@ -126,25 +123,28 @@ class BannerService:
         """Tenta ORS, se falhar, usa OpenMeteo (Gratuito)"""
         
         # 1. TENTATIVA OPENROUTESERVICE
-        url_ors = "https://api.openrouteservice.org/geocode/search"
-        params_ors = {"api_key": cls.ORS_API_KEY, "text": query, "size": 1}
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url_ors, params=params_ors, timeout=3) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        features = data.get("features", [])
-                        if features:
-                            props = features[0].get("properties", {})
-                            geom = features[0].get("geometry", {}).get("coordinates", [])
-                            if len(geom) >= 2:
-                                print(f"📍 Local encontrado via ORS: {props.get('label')}")
-                                return {"name": props.get("name", query), "label": props.get("label", query), "lon": geom[0], "lat": geom[1]}
-                    else:
-                        print(f"⚠️ Erro ORS ({resp.status}): Tentando Fallback...")
-        except Exception as e:
-            print(f"⚠️ Exceção ORS: {e}")
+        if ORS_API_KEY:
+            url_ors = "https://api.openrouteservice.org/geocode/search"
+            params_ors = {"api_key": ORS_API_KEY, "text": query, "size": 1}
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url_ors, params=params_ors, timeout=3) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            features = data.get("features", [])
+                            if features:
+                                props = features[0].get("properties", {})
+                                geom = features[0].get("geometry", {}).get("coordinates", [])
+                                if len(geom) >= 2:
+                                    print(f"📍 Local encontrado via ORS: {props.get('label')}")
+                                    return {"name": props.get("name", query), "label": props.get("label", query), "lon": geom[0], "lat": geom[1]}
+                        else:
+                            print(f"⚠️ Erro ORS ({resp.status}): Tentando Fallback...")
+            except Exception as e:
+                print(f"⚠️ Exceção ORS: {e}")
+        else:
+            log.error("ORS_API_KEY not found in environment. OpenRouteService geocoding is disabled.")
 
         # 2. PLANO B: OPEN-METEO GEOCODING (Sem Key)
         print("🔄 Tentando OpenMeteo Geocoding...")
