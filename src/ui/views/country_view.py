@@ -1,7 +1,4 @@
 import flet as ft
-# Removemos a importação direta de PlaceTab
-# from src.ui.components.place_tab import PlaceTab
-# Importamos a Factory (O Cérebro)
 from src.ui.components.content_factory import ContentFactory
 
 class CountryView(ft.View):
@@ -113,9 +110,6 @@ class CountryView(ft.View):
 
     def _load_content(self, should_update=True):
         try:
-            # === AQUI ESTÁ A INTEGRAÇÃO DA FASE 3 ===
-            # Em vez de chamar PlaceTab direto, chamamos a Factory.
-            # Se for 'py' e 'shop' no futuro, a Factory entregará a calculadora.
             new_content = ContentFactory.get_content(self.main_page, self.current_country, self.current_category)
             
             self.content_area.content = new_content
