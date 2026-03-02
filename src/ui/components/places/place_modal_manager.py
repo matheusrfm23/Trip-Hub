@@ -7,6 +7,9 @@ from src.ui.components.upload_manager import UploadManager
 from src.ui.components.gallery_viewer import GalleryViewer
 from src.core.config import UPLOAD_ABS_PATH, ASSETS_DIR
 import glob
+from src.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 class PlaceModalManager:
     def __init__(self, page: ft.Page, on_data_change):
@@ -56,7 +59,7 @@ class PlaceModalManager:
 
     # --- MAPS FIX (BLINDADO) ---
     async def safe_launch_url(self, url):
-        print(f"DEBUG: Tentando abrir mapa: {url}")
+        logger.debug(f"Tentando abrir mapa: {url}")
         if not url: 
             self._snack("Link indisponível", ft.Colors.ORANGE)
             return
@@ -71,19 +74,19 @@ class PlaceModalManager:
             await self.page.launch_url(target, web_window_name="_blank")
         except TypeError:
             # Se a versão for muito antiga e não aceitar '_blank', tenta normal
-            print("DEBUG: Versão antiga detectada, abrindo modo padrão.")
+            logger.debug("Versão antiga detectada, abrindo modo padrão.")
             try:
                 await self.page.launch_url(target)
             except Exception as e:
                 self._snack(f"Erro ao abrir: {e}", ft.Colors.RED)
         except Exception as e:
-            print(f"Erro Crítico Maps: {e}")
+            logger.error(f"Erro Crítico Maps: {e}")
             self._snack("Erro ao abrir link", ft.Colors.RED)
 
     # --- CLIPBOARD FIX (SEM JAVASCRIPT) ---
     async def smart_copy(self, text):
         if not text: return
-        print(f"DEBUG: Copiando '{text}'")
+        logger.debug(f"Copiando '{text}'")
         
         success = False
         # Tenta método nativo do Flet (funciona na maioria das versões)
@@ -101,7 +104,7 @@ class PlaceModalManager:
             self._snack("Copiado!", ft.Colors.GREEN)
         else:
             # Fallback Visual: Mostra o modal para o usuário copiar
-            print("DEBUG: Falha na cópia automática. Abrindo modal manual.")
+            logger.debug("Falha na cópia automática. Abrindo modal manual.")
             self.copy_field.value = text
             self.open_modal(self.copy_dialog)
             try: await self.copy_field.focus()
@@ -191,7 +194,7 @@ class PlaceModalManager:
             src = os.path.join(UPLOAD_ABS_PATH, filename)
             dest = os.path.join(ASSETS_DIR, "images", f"{self.target_item_id}_{int(time.time())}{os.path.splitext(filename)[1]}")
             shutil.copy(src, dest); self.close_modal(self.photo_dialog); self.on_data_change() 
-        except Exception as e: print(f"Erro: {e}")
+        except Exception as e: logger.error(f"Erro: {e}")
 
     def delete_photo(self, path):
         try:
