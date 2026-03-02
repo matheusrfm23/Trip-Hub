@@ -2,6 +2,25 @@ import os
 import secrets
 import socket
 import flet as ft
+from dotenv import load_dotenv
+
+# ==============================================================================
+# 0. CARREGAMENTO DE VARIÁVEIS DE AMBIENTE E VERIFICAÇÃO DE SEGURANÇA
+# ==============================================================================
+env_path = os.path.join(os.getcwd(), ".env")
+
+if not os.path.exists(env_path):
+    print("\n" + "!"*60)
+    print("ERRO FATAL DE CONFIGURAÇÃO: Arquivo .env não encontrado!")
+    print("O arquivo .env é OBRIGATÓRIO para o funcionamento do sistema.")
+    print("Por favor, execute o seguinte comando na raiz do projeto:")
+    print("    cp .env.example .env")
+    print("E configure suas variáveis de ambiente, especialmente o MASTER_PIN.")
+    print("!"*60 + "\n")
+    import sys
+    sys.exit(1)
+
+load_dotenv(env_path)
 
 # ==============================================================================
 # 1. CONFIGURAÇÕES GERAIS DO TRIP HUB
