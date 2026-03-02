@@ -3,12 +3,11 @@ import logging
 import traceback
 import asyncio
 
+from src.core.logger import logger
 from src.logic.auth_service import AuthService
 from src.ui.views.login_view import LoginView
 from src.ui.views.dashboard_view import DashboardView
 from src.ui.views.country_view import CountryView
-
-logger = logging.getLogger("TripHub.Router")
 
 class Router:
     PUBLIC_ROUTES = ["/login", "/error", "/logout"]
@@ -107,7 +106,13 @@ class Router:
         try:
             if self.page.client_storage:
                 self.page.client_storage.remove("user_id")
-        except: pass
+        except Exception as e:
+            logger.error("Falha ao remover user_id do client_storage no logout.", exc_info=True)
+            if hasattr(self.page, "session"):
+                try:
+                    self.page.session.clear()
+                except Exception:
+                    pass
 
     def _append_error_view(self, msg):
         self.page.views.append(
