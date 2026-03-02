@@ -71,7 +71,7 @@ class PlaceTab(ft.Column):
                             "on_edit": lambda i: self._open_edit_logic(i),
                             "on_delete": lambda i: self._delete_direct(i),
                             "on_add_photo": lambda pid: self.modal_manager.open_photo_manager(pid),
-                            "on_delete_photo": self.modal_manager.delete_photo,
+                            "on_delete_photo": lambda path: self.main_page.run_task(self.modal_manager.delete_photo, path),
                             
                             # CORRIGIDO: Usa safe_launch_url (o nome correto) via run_task
                             "on_open_map": lambda link: self.main_page.run_task(self.modal_manager.safe_launch_url, link),

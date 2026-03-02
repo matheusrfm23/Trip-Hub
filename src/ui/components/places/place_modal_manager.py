@@ -1,5 +1,6 @@
 import flet as ft
 import time
+import asyncio
 import os
 import shutil
 from src.ui.components.common.image_carousel import ImageCarousel
@@ -115,7 +116,7 @@ class PlaceModalManager:
             is_admin=self.is_admin,
             height=280,
             on_zoom=self.open_zoom,
-            on_delete_photo=self.delete_photo
+            on_delete_photo=lambda path: self.page.run_task(self.delete_photo, path)
         )
         
         admin_row = ft.Row(visible=False)
@@ -193,14 +194,14 @@ class PlaceModalManager:
             shutil.copy(src, dest); self.close_modal(self.photo_dialog); self.on_data_change() 
         except Exception as e: print(f"Erro: {e}")
 
-    def delete_photo(self, path):
+    async def delete_photo(self, path):
         try:
             filename = path.split("/")[-1].split("?")[0]
             abs_path = os.path.join(ASSETS_DIR, "images", filename)
             if os.path.exists(abs_path):
                 for _ in range(3):
                     try: os.remove(abs_path); break
-                    except: time.sleep(0.5)
+                    except: await asyncio.sleep(0.5)
                 self.on_data_change()
                 if self.current_modal: self.close_modal(self.current_modal)
         except: pass
