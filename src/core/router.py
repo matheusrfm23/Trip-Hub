@@ -111,16 +111,18 @@ class Router:
             else:
                 self.page.client_storage.remove("user_id")
                 return False
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Erro ao tentar restaurar sessão do usuário: {e}", exc_info=True)
             return False
 
     def _perform_logout(self):
         if hasattr(self.page, "user_profile"):
             del self.page.user_profile
         try:
-            if self.page.client_storage:
+            if hasattr(self.page, "client_storage") and self.page.client_storage:
                 self.page.client_storage.remove("user_id")
-        except: pass
+        except Exception as e:
+            logger.error(f"Erro ao remover ID do usuário durante logout: {e}", exc_info=True)
 
     def _append_error_view(self, msg):
         self.page.views.append(
