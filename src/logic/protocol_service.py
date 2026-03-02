@@ -2,6 +2,9 @@
 import json
 import os
 from src.core.locker import file_lock  # <--- IMPORTANTE: O Cadeado
+from src.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ProtocolService:
     # Arquivo onde salvaremos quem já leu
@@ -26,7 +29,8 @@ class ProtocolService:
                 data = json.load(f)
             # Retorna True se o ID estiver lá e for True
             return data.get(str(user_id), False)
-        except:
+        except Exception as e:
+            logger.error(f"Erro ao ler protocolo: {e}")
             return False
 
     @staticmethod
@@ -48,5 +52,5 @@ class ProtocolService:
                     json.dump(data, f, indent=4)
             return True
         except Exception as e:
-            print(f"Erro ao salvar protocolo: {e}")
+            logger.error(f"Erro ao salvar protocolo: {e}")
             return False
