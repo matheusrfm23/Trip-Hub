@@ -35,7 +35,10 @@ def get_lan_ip():
 MEU_IP = get_lan_ip()
 
 # [CORREÇÃO] Porta unificada. Se mudar aqui, muda no servidor inteiro.
-PORTA = int(os.getenv("PORT", 8080)) 
+PORTA = int(os.getenv("PORT", 8080))
+
+# [SEGURANÇA] Habilita validação de SSL por padrão
+SSL_VERIFY = str(os.getenv("SSL_VERIFY", "True")).lower() in ("true", "1", "t")
 
 # ==============================================================================
 # 3. INFRAESTRUTURA DE ARQUIVOS
